@@ -7,7 +7,7 @@ import (
 	"math"
 	"os"
 
-	"github.com/cdipaolo/goml/base"
+	"github.com/bountylabs/goml/base"
 )
 
 // LocalLinear implements a locally weighted

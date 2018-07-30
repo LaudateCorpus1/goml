@@ -162,7 +162,12 @@ type StochasticAscendable interface {
 	// J(θ) with respect to the j-th parameter of
 	// the hypothesis, θ[j], for the training example
 	// x[i]. Called as Dij(i,j)
-	Dij(int, int) (float64, error)
+	Dij(int, int, float64) (float64)
+
+
+	// calculates the difference between the expected value at i
+	// from the predicted value of i in the training set
+	TrainingError(i int) (float64, error)
 
 	// Theta returns a pointer to the parameter vector
 	// theta, which is 1D vector of floats
@@ -173,6 +178,10 @@ type StochasticAscendable interface {
 	// return after less if strong convergance is
 	// detected, but it'll let the user set a cap.
 	MaxIterations() int
+
+
+	// Save to file after each epoch
+	PersistToFile(path string) error
 }
 
 // Datapoint is used in some models where it is cleaner

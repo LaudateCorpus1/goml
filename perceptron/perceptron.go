@@ -98,7 +98,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/cdipaolo/goml/base"
+	"github.com/bountylabs/goml/base"
 )
 
 // Perceptron represents the perceptron online

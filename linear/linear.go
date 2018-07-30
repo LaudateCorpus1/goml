@@ -58,7 +58,7 @@ import (
 	"math"
 	"os"
 
-	"github.com/cdipaolo/goml/base"
+	"github.com/bountylabs/goml/base"
 )
 
 // LeastSquares implements a standard linear regression model
@@ -177,6 +177,17 @@ func (l *LeastSquares) UpdateTrainingSet(trainingSet [][]float64, expectedResult
 	return nil
 }
 
+func (l *LeastSquares) TrainingError(i int) (float64, error) {
+
+	prediction, err := l.Predict(l.trainingSet[i])
+	if err != nil {
+		return 0, err
+	}
+
+	return l.expectedResults[i] - prediction[0], nil
+
+}
+
 // UpdateLearningRate set's the learning rate of the model
 // to the given float64.
 func (l *LeastSquares) UpdateLearningRate(a float64) {
@@ -258,7 +269,7 @@ func (l *LeastSquares) Learn() error {
 	if l.method == base.BatchGA {
 		err = base.GradientAscent(l)
 	} else if l.method == base.StochasticGA {
-		err = base.StochasticGradientAscent(l)
+		err = base.StochasticGradientAscent(l, "")
 	} else {
 		err = fmt.Errorf("Chose a training method not implemented for LeastSquares regression")
 	}
@@ -527,11 +538,7 @@ func (l *LeastSquares) Dj(j int) (float64, error) {
 // data they are looking up! (because this is getting
 // called so much, it needs to be efficient with
 // comparisons)
-func (l *LeastSquares) Dij(i int, j int) (float64, error) {
-	prediction, err := l.Predict(l.trainingSet[i])
-	if err != nil {
-		return 0, err
-	}
+func (l *LeastSquares) Dij(i int, j int, prediction_error float64) (float64) {
 
 	// account for constant term
 	// x is x[i][j] via Andrew Ng's terminology
@@ -543,7 +550,7 @@ func (l *LeastSquares) Dij(i int, j int) (float64, error) {
 	}
 
 	var gradient float64
-	gradient = (l.expectedResults[i] - prediction[0]) * x
+	gradient = prediction_error * x
 
 	// add in the regularization term
 	// λ*θ[j]
@@ -554,7 +561,7 @@ func (l *LeastSquares) Dij(i int, j int) (float64, error) {
 		gradient += l.regularization * l.Parameters[j]
 	}
 
-	return gradient, nil
+	return gradient
 }
 
 // J returns the Least Squares cost function of the given linear

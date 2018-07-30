@@ -12,7 +12,7 @@ import (
 	"github.com/bountylabs/goml/base"
 )
 
-// Logistic represents the logistic classification
+// SparseLogistic represents the logistic classification
 // model with a sigmoidal hypothesis
 //
 // https://en.wikipedia.org/wiki/Logistic_regression
@@ -24,7 +24,7 @@ import (
 // []float64 to come as either a 0 or a 1, and
 // will predict the probability that, based on inputs
 // x, whether y is 1
-type Logistic struct {
+type SparseLogistic struct {
 	// alpha and maxIterations are used only for
 	// GradientAscent during learning. If maxIterations
 	// is 0, then GradientAscent will run until the
@@ -46,8 +46,9 @@ type Logistic struct {
 	// trainingSet and expectedResults are the
 	// 'x', and 'y' of the data, expressed as
 	// vectors, that the model can optimize from
-	trainingSet     [][]float64
-	expectedResults []float64
+	trainingSet      []map[int]float64
+	expectedResults  []float64
+	numberOfFeatures int
 
 	Parameters []float64 `json:"theta"`
 
@@ -56,7 +57,7 @@ type Logistic struct {
 	Output io.Writer
 }
 
-// NewLogistic takes in a learning rate alpha, a regularization
+// NewSparseLogistic takes in a learning rate alpha, a regularization
 // parameter value (0 means no regularization, higher value
 // means higher bias on the model,) the maximum number of
 // iterations the data can go through in gradient descent,
@@ -69,7 +70,7 @@ type Logistic struct {
 // of the arguments
 //
 // DATA FORMAT:
-// The Logistic model expects expected results to be either a 0
+// The SparseLogistic model expects expected results to be either a 0
 // or a 1. Predict returns the probability that the item inputted
 // is a 1. Obviously this means that the probability that the inputted
 // x is a 0 is 1-TheGuess
@@ -82,7 +83,7 @@ type Logistic struct {
 //     // Max Iterations: 800
 //     // Dataset to learn fron: testX
 //     // Expected results dataset: testY
-//     model := NewLogistic(base.BatchGA, 1e-4, 6, 800, testX, testY)
+//     model := NewSparseLogistic(base.BatchGA, 1e-4, 6, 800, testX, testY)
 //
 //     err := model.Learn()
 //     if err != nil {
@@ -95,17 +96,9 @@ type Logistic struct {
 //     if err != nil {
 //         panic("AAAARGGGH! SHIVER ME TIMBERS! THESE ROTTEN SCOUNDRELS FOUND AN ERROR!!!")
 //     }
-func NewLogistic(method base.OptimizationMethod, alpha, regularization float64, maxIterations int, trainingSet [][]float64, expectedResults []float64, features ...int) *Logistic {
-	var params []float64
-	if len(features) != 0 {
-		params = make([]float64, features[0]+1)
-	} else if trainingSet == nil || len(trainingSet) == 0 {
-		params = []float64{}
-	} else {
-		params = make([]float64, len(trainingSet[0])+1)
-	}
+func NewSparseLogistic(method base.OptimizationMethod, alpha, regularization float64, maxIterations int, trainingSet []map[int]float64, expectedResults []float64, numberOfFeatures int) *SparseLogistic {
 
-	return &Logistic{
+	return &SparseLogistic{
 		alpha:          alpha,
 		regularization: regularization,
 		maxIterations:  maxIterations,
@@ -114,10 +107,11 @@ func NewLogistic(method base.OptimizationMethod, alpha, regularization float64, 
 
 		trainingSet:     trainingSet,
 		expectedResults: expectedResults,
+		numberOfFeatures: numberOfFeatures,
 
 		// initialize θ as the zero vector (that is,
 		// the vector of all zeros)
-		Parameters: params,
+		Parameters: make([]float64, numberOfFeatures+1),
 
 		Output: os.Stdout,
 	}
@@ -128,7 +122,7 @@ func NewLogistic(method base.OptimizationMethod, alpha, regularization float64, 
 // you want to retrain a model starting with the parameter
 // vector of a previous training session, but most of the time
 // wouldn't be used.
-func (l *Logistic) UpdateTrainingSet(trainingSet [][]float64, expectedResults []float64) error {
+func (l *SparseLogistic) UpdateTrainingSet(trainingSet []map[int]float64, expectedResults []float64) error {
 	if len(trainingSet) == 0 {
 		return fmt.Errorf("Error: length of given training set is 0! Need data!")
 	}
@@ -144,39 +138,32 @@ func (l *Logistic) UpdateTrainingSet(trainingSet [][]float64, expectedResults []
 
 // UpdateLearningRate set's the learning rate of the model
 // to the given float64.
-func (l *Logistic) UpdateLearningRate(a float64) {
+func (l *SparseLogistic) UpdateLearningRate(a float64) {
 	l.alpha = a
 }
 
 // LearningRate returns the learning rate α for gradient
 // descent to optimize the model. Could vary as a function
 // of something else later, potentially.
-func (l *Logistic) LearningRate() float64 {
+func (l *SparseLogistic) LearningRate() float64 {
 	return l.alpha
 }
 
 // Examples returns the number of training examples (m)
 // that the model currently is training from.
-func (l *Logistic) Examples() int {
+func (l *SparseLogistic) Examples() int {
 	return len(l.trainingSet)
 }
 
 // MaxIterations returns the number of maximum iterations
 // the model will go through in GradientAscent, in the
 // worst case
-func (l *Logistic) MaxIterations() int {
+func (l *SparseLogistic) MaxIterations() int {
 	return l.maxIterations
 }
 
-func (l *Logistic) TrainingError(i int) (float64, error) {
-
-	prediction, err := l.PredictCheap(l.trainingSet[i])
-	if err != nil {
-		return 0, err
-	}
-
-	return l.expectedResults[i] - prediction, nil
-
+func (l *SparseLogistic) TrainingError(i int) (float64, error) {
+	return l.expectedResults[i] - l.PredictSparse(l.trainingSet[i]), nil
 }
 
 // Predict takes in a variable x (an array of floats,) and
@@ -187,17 +174,10 @@ func (l *Logistic) TrainingError(i int) (float64, error) {
 // first be normalized to unit length. Only use this if
 // you trained off of normalized inputs and are feeding
 // an un-normalized input
-func (l *Logistic) Predict(x []float64, normalize ...bool) ([]float64, error) {
-	result, err := l.PredictCheap(x, normalize...)
-	if err != nil {
-		return nil, err
-	}
-	return []float64{result}, nil
-}
+func (l *SparseLogistic) Predict(x []float64, normalize ...bool) ([]float64, error) {
 
-func (l *Logistic) PredictCheap(x []float64, normalize ...bool) (float64, error) {
 	if len(x)+1 != len(l.Parameters) {
-		return 0, fmt.Errorf("Error: Parameter vector should be 1 longer than input vector!\n\tLength of x given: %v\n\tLength of parameters: %v\n", len(x), len(l.Parameters))
+		return nil, fmt.Errorf("Error: Parameter vector should be 1 longer than input vector!\n\tLength of x given: %v\n\tLength of parameters: %v\n", len(x), len(l.Parameters))
 	}
 
 	if len(normalize) != 0 && normalize[0] {
@@ -213,14 +193,30 @@ func (l *Logistic) PredictCheap(x []float64, normalize ...bool) (float64, error)
 
 	result := 1 / (1 + math.Exp(-sum))
 
-	return result, nil
+	return []float64{result}, nil
 }
 
+func (l *SparseLogistic) PredictSparse(x map[int]float64, normalize ...bool) (float64) {
+
+	if len(normalize) != 0 && normalize[0] {
+		base.NormalizeSparsePoint(x)
+	}
+
+	// include constant term in sum
+	sum := l.Parameters[0]
+
+	for i, v := range x {
+		sum += v * l.Parameters[i+1]
+	}
+
+	result := 1 / (1 + math.Exp(-sum))
+	return result
+}
 
 // Learn takes the struct's dataset and expected results and runs
 // batch gradient descent on them, optimizing theta so you can
 // predict based on those results
-func (l *Logistic) Learn() error {
+func (l *SparseLogistic) Learn(file string) error {
 	if l.trainingSet == nil || l.expectedResults == nil {
 		err := fmt.Errorf("ERROR: Attempting to learn with no training examples!\n")
 		fmt.Fprintf(l.Output, err.Error())
@@ -228,7 +224,7 @@ func (l *Logistic) Learn() error {
 	}
 
 	examples := len(l.trainingSet)
-	if examples == 0 || len(l.trainingSet[0]) == 0 {
+	if examples == 0 || l.numberOfFeatures == 0 {
 		err := fmt.Errorf("ERROR: Attempting to learn with no training examples!\n")
 		fmt.Fprintf(l.Output, err.Error())
 		return err
@@ -239,15 +235,15 @@ func (l *Logistic) Learn() error {
 		return err
 	}
 
-	fmt.Fprintf(l.Output, "Training:\n\tModel: Logistic (Binary) Classification\n\tOptimization Method: %v\n\tTraining Examples: %v\n\tFeatures: %v\n\tLearning Rate α: %v\n\tRegularization Parameter λ: %v\n...\n\n", l.method, examples, len(l.trainingSet[0]), l.alpha, l.regularization)
+	fmt.Fprintf(l.Output, "Training:\n\tModel: SparseLogistic (Binary) Classification\n\tOptimization Method: %v\n\tTraining Examples: %v\n\tFeatures: %v\n\tLearning Rate α: %v\n\tRegularization Parameter λ: %v\n...\n\n", l.method, examples, l.numberOfFeatures, l.alpha, l.regularization)
 
 	var err error
 	if l.method == base.BatchGA {
 		err = base.GradientAscent(l)
 	} else if l.method == base.StochasticGA {
-		err = base.StochasticGradientAscent(l, "")
+		err = base.StochasticGradientAscent(l, file)
 	} else {
-		err = fmt.Errorf("Chose a training method not implemented for Logistic regression")
+		err = fmt.Errorf("Chose a training method not implemented for SparseLogistic regression")
 	}
 
 	if err != nil {
@@ -291,21 +287,21 @@ func (l *Logistic) Learn() error {
 // of the hypothesis, though it could be favorable if
 // your data comes in drastically different scales.
 //
-// Example Online Logistic Regression:
+// Example Online SparseLogistic Regression:
 //
 //     // create the channel of data and errors
 //     stream := make(chan base.Datapoint, 100)
 //     errors := make(chan error)
 //
 //     // notice how we are adding another integer
-//     // to the end of the NewLogistic call. This
+//     // to the end of the NewSparseLogistic call. This
 //     // tells the model to use that number of features
 //     // (4) in leu of finding that from the dataset
 //     // like you would with batch/stochastic GD
 //     //
 //     // Also – the 'base.StochasticGA' doesn't affect
 //     // anything. You could put batch.
-//     model := NewLogistic(base.StochasticGA, .0001, 0, 0, nil, nil, 4)
+//     model := NewSparseLogistic(base.StochasticGA, .0001, 0, 0, nil, nil, 4)
 //
 //     go model.OnlineLearn(errors, stream, func(theta [][]float64) {
 //         // do something with the new theta (persist
@@ -361,7 +357,7 @@ func (l *Logistic) Learn() error {
 //     if err != nil {
 //         panic("AAAARGGGH! SHIVER ME TIMBERS! THESE ROTTEN SCOUNDRELS FOUND AN ERROR!!!")
 //     }
-func (l *Logistic) OnlineLearn(errors chan error, dataset chan base.Datapoint, onUpdate func([][]float64), normalize ...bool) {
+func (l *SparseLogistic) OnlineLearn(errors chan error, dataset chan base.Datapoint, onUpdate func([][]float64), normalize ...bool) {
 	if errors == nil {
 		errors = make(chan error)
 	}
@@ -371,7 +367,7 @@ func (l *Logistic) OnlineLearn(errors chan error, dataset chan base.Datapoint, o
 		return
 	}
 
-	fmt.Fprintf(l.Output, "Training:\n\tModel: Logistic (Binary) Classifier\n\tOptimization Method: Online Stochastic Gradient Descent\n\tFeatures: %v\n\tLearning Rate α: %v\n...\n\n", len(l.Parameters), l.alpha)
+	fmt.Fprintf(l.Output, "Training:\n\tModel: SparseLogistic (Binary) Classifier\n\tOptimization Method: Online Stochastic Gradient Descent\n\tFeatures: %v\n\tLearning Rate α: %v\n...\n\n", len(l.Parameters), l.alpha)
 
 	norm := len(normalize) != 0 && normalize[0]
 	var point base.Datapoint
@@ -457,7 +453,7 @@ func (l *Logistic) OnlineLearn(errors chan error, dataset chan base.Datapoint, o
 // String implements the fmt interface for clean printing. Here
 // we're using it to print the model as the equation h(θ)=...
 // where h is the logistic hypothesis model
-func (l *Logistic) String() string {
+func (l *SparseLogistic) String() string {
 	features := len(l.Parameters) - 1
 	if len(l.Parameters) == 0 {
 		fmt.Fprintf(l.Output, "ERROR: Attempting to print model with the 0 vector as it's parameter vector! Train first!\n")
@@ -482,7 +478,7 @@ func (l *Logistic) String() string {
 // with respect to theta[j] where theta is the parameter vector
 // associated with our hypothesis function Predict (upon which
 // we are optimizing
-func (l *Logistic) Dj(j int) (float64, error) {
+func (l *SparseLogistic) Dj(j int) (float64, error) {
 	if j > len(l.Parameters)-1 {
 		return 0, fmt.Errorf("J (%v) would index out of the bounds of the training set data (len: %v)", j, len(l.Parameters))
 	}
@@ -490,10 +486,7 @@ func (l *Logistic) Dj(j int) (float64, error) {
 	var sum float64
 
 	for i := range l.trainingSet {
-		prediction, err := l.Predict(l.trainingSet[i])
-		if err != nil {
-			return 0, err
-		}
+		prediction := l.PredictSparse(l.trainingSet[i])
 
 		// account for constant term
 		// x is x[i][j] via Andrew Ng's terminology
@@ -504,7 +497,7 @@ func (l *Logistic) Dj(j int) (float64, error) {
 			x = l.trainingSet[i][j-1]
 		}
 
-		sum += (l.expectedResults[i] - prediction[0]) * x
+		sum += (l.expectedResults[i] - prediction) * x
 	}
 
 	// add in the regularization term
@@ -528,8 +521,7 @@ func (l *Logistic) Dj(j int) (float64, error) {
 // data they are looking up! (because this is getting
 // called so much, it needs to be efficient with
 // comparisons)
-func (l *Logistic) Dij(i int, j int, prediction_error float64) (float64) {
-
+func (l *SparseLogistic) Dij(i int, j int, prediction_error float64) float64 {
 
 	// account for constant term
 	// x is x[i][j] via Andrew Ng's terminology
@@ -537,9 +529,7 @@ func (l *Logistic) Dij(i int, j int, prediction_error float64) (float64) {
 	if j == 0 {
 		x = 1
 	} else {
-		observation := l.trainingSet[i]
-		x = observation[j-1]
-		observation = nil
+		x = l.trainingSet[i][j-1]
 	}
 
 	var gradient float64
@@ -560,7 +550,7 @@ func (l *Logistic) Dij(i int, j int, prediction_error float64) (float64) {
 // Theta returns the parameter vector θ for use in persisting
 // the model, and optimizing the model through gradient descent
 // ( or other methods like Newton's Method)
-func (l *Logistic) Theta() []float64 {
+func (l *SparseLogistic) Theta() []float64 {
 	return l.Parameters
 }
 
@@ -572,7 +562,7 @@ func (l *Logistic) Theta() []float64 {
 // The data is stored as JSON because it's one of the most
 // efficient storage method (you only need one comma extra
 // per feature + two brackets, total!) And it's extendable.
-func (l *Logistic) PersistToFile(path string) error {
+func (l *SparseLogistic) PersistToFile(path string) error {
 	if path == "" {
 		return fmt.Errorf("ERROR: you just tried to persist your model to a file with no path!! That's a no-no. Try it with a valid filepath")
 	}
@@ -600,7 +590,7 @@ func (l *Logistic) PersistToFile(path string) error {
 // This would be useful in persisting data between running
 // a model on data, or for graphing a dataset with a fit in
 // another framework like Julia/Gadfly.
-func (l *Logistic) RestoreFromFile(path string) error {
+func (l *SparseLogistic) RestoreFromFile(path string) error {
 	if path == "" {
 		return fmt.Errorf("ERROR: you just tried to restore your model from a file with no path! That's a no-no. Try it with a valid filepath")
 	}

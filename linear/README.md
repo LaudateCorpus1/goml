@@ -1,5 +1,5 @@
 ## Generalized Linear Models
-### `import "github.com/cdipaolo/goml/linear"`
+### `import "github.com/bountylabs/goml/linear"`
 
 [![GoDoc](https://godoc.org/github.com/cdipaolo/goml/linear?status.svg)](https://godoc.org/github.com/cdipaolo/goml/linear)
 

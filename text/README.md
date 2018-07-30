@@ -1,5 +1,5 @@
 ## Text Classification
-### `import "github.com/cdipaolo/goml/text"`
+### `import "github.com/bountylabs/goml/text"`
 
 [![GoDoc](https://godoc.org/github.com/cdipaolo/goml/text?status.svg)](https://godoc.org/github.com/cdipaolo/goml/text)
 

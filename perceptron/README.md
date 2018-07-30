@@ -1,5 +1,5 @@
 ## [Perceptron](http://cs229.stanford.edu/notes/cs229-notes6.pdf)
-### `import "github.com/cdipaolo/goml/perceptron"`
+### `import "github.com/bountylabs/goml/perceptron"`
 
 [![GoDoc](https://godoc.org/github.com/cdipaolo/goml/perceptron?status.svg)](https://godoc.org/github.com/cdipaolo/goml/perceptron)
 

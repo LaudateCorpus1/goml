@@ -5,7 +5,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/cdipaolo/goml/base"
+	"github.com/bountylabs/goml/base"
 
 	"github.com/stretchr/testify/assert"
 )
