@@ -36,8 +36,10 @@ type SparseLogistic struct {
 	// _no_ data regularization. The higher the term,
 	// the greater the bias on the regression
 	alpha          float64
+	alphaMax       float64
 	regularization float64
 	maxIterations  int
+	rt             base.RegularizationType
 
 	// method is the optimization method used when training
 	// the model
@@ -96,17 +98,19 @@ type SparseLogistic struct {
 //     if err != nil {
 //         panic("AAAARGGGH! SHIVER ME TIMBERS! THESE ROTTEN SCOUNDRELS FOUND AN ERROR!!!")
 //     }
-func NewSparseLogistic(method base.OptimizationMethod, alpha, regularization float64, maxIterations int, trainingSet []map[int]float64, expectedResults []float64, numberOfFeatures int) *SparseLogistic {
+func NewSparseLogistic(method base.OptimizationMethod, alpha, alphaMax, regularization float64, rt base.RegularizationType, maxIterations int, trainingSet []map[int]float64, expectedResults []float64, numberOfFeatures int) *SparseLogistic {
 
 	return &SparseLogistic{
 		alpha:          alpha,
+		alphaMax:       alphaMax,
 		regularization: regularization,
+		rt:             rt,
 		maxIterations:  maxIterations,
 
 		method: method,
 
-		trainingSet:     trainingSet,
-		expectedResults: expectedResults,
+		trainingSet:      trainingSet,
+		expectedResults:  expectedResults,
 		numberOfFeatures: numberOfFeatures,
 
 		// initialize θ as the zero vector (that is,
@@ -147,6 +151,13 @@ func (l *SparseLogistic) UpdateLearningRate(a float64) {
 // of something else later, potentially.
 func (l *SparseLogistic) LearningRate() float64 {
 	return l.alpha
+}
+
+// LearningRate returns the learning rate α for gradient
+// descent to optimize the model. Could vary as a function
+// of something else later, potentially.
+func (l *SparseLogistic) LearningRateMax() float64 {
+	return l.alphaMax
 }
 
 // Examples returns the number of training examples (m)
@@ -196,7 +207,7 @@ func (l *SparseLogistic) Predict(x []float64, normalize ...bool) ([]float64, err
 	return []float64{result}, nil
 }
 
-func (l *SparseLogistic) PredictSparse(x map[int]float64, normalize ...bool) (float64) {
+func (l *SparseLogistic) PredictSparse(x map[int]float64, normalize ...bool) float64 {
 
 	if len(normalize) != 0 && normalize[0] {
 		base.NormalizeSparsePoint(x)
@@ -235,7 +246,7 @@ func (l *SparseLogistic) Learn(file string) error {
 		return err
 	}
 
-	fmt.Fprintf(l.Output, "Training:\n\tModel: SparseLogistic (Binary) Classification\n\tOptimization Method: %v\n\tTraining Examples: %v\n\tFeatures: %v\n\tLearning Rate α: %v\n\tRegularization Parameter λ: %v\n...\n\n", l.method, examples, l.numberOfFeatures, l.alpha, l.regularization)
+	fmt.Fprintf(l.Output, "Training:\n\tModel: SparseLogistic (Binary) Classification\n\tOptimization Method: %v\n\tTraining Examples: %v\n\tFeatures: %v\n\tLearning Rate α: %v-%v\n\tRegularization Parameter λ: %v\n\tRegularization Type: %s\n...\n\n", l.method, examples, l.numberOfFeatures, l.alphaMax, l.alpha, l.regularization, l.rt.String())
 
 	var err error
 	if l.method == base.BatchGA {
@@ -251,7 +262,7 @@ func (l *SparseLogistic) Learn(file string) error {
 		return err
 	}
 
-	fmt.Fprintf(l.Output, "Training Completed.\n%v\n\n", l)
+	fmt.Fprintf(l.Output, "Training Completed.\n")
 	return nil
 }
 
@@ -367,7 +378,7 @@ func (l *SparseLogistic) OnlineLearn(errors chan error, dataset chan base.Datapo
 		return
 	}
 
-	fmt.Fprintf(l.Output, "Training:\n\tModel: SparseLogistic (Binary) Classifier\n\tOptimization Method: Online Stochastic Gradient Descent\n\tFeatures: %v\n\tLearning Rate α: %v\n...\n\n", len(l.Parameters), l.alpha)
+	fmt.Fprintf(l.Output, "Training:\n\tModel: SparseLogistic (Binary) Classifier\n\tOptimization Method: Online Stochastic Gradient Descent\n\tFeatures: %v\n\tLearning Rate α: %v-%v\n...\n\n", len(l.Parameters), l.alphaMax, l.alpha)
 
 	norm := len(normalize) != 0 && normalize[0]
 	var point base.Datapoint
@@ -417,7 +428,7 @@ func (l *SparseLogistic) OnlineLearn(errors chan error, dataset chan base.Datapo
 					// notice that we don't count the
 					// constant term
 					if j != 0 {
-						gradient += l.regularization * l.Parameters[j]
+						gradient -= l.Regularization(j)
 					}
 
 					return gradient, nil
@@ -506,10 +517,10 @@ func (l *SparseLogistic) Dj(j int) (float64, error) {
 	// notice that we don't count the
 	// constant term
 	if j != 0 {
-		sum += l.regularization * l.Parameters[j]
+		sum -= l.Regularization(j)
 	}
 
-	return sum, nil
+	return sum / float64(len(l.trainingSet)), nil
 }
 
 // Dij returns the derivative of the cost function
@@ -541,10 +552,32 @@ func (l *SparseLogistic) Dij(i int, j int, prediction_error float64) float64 {
 	// notice that we don't count the
 	// constant term
 	if j != 0 {
-		gradient += l.regularization * l.Parameters[j]
+		gradient -= l.Regularization(j)
 	}
 
 	return gradient
+}
+
+func (l *SparseLogistic) Regularization(j int) float64 {
+	switch l.rt {
+	case base.L1:
+		return l.regularization * NormAbs(l.Parameters[j])
+	case base.L2:
+		return l.regularization * (l.Parameters[j])
+	default:
+		panic("unkown regularization type")
+	}
+}
+
+func NormAbs(in float64) float64 {
+	switch {
+	case in > 0:
+		return 1
+	case in < 0:
+		return -1
+	default:
+		return 0
+	}
 }
 
 // Theta returns the parameter vector θ for use in persisting

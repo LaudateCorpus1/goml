@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"math/rand"
 	"sync"
 	"time"
-	"math/rand"
 )
 
 // GradientAscent operates on a Ascendable model and
@@ -77,10 +77,13 @@ func GradientAscent(d Ascendable) error {
 // rate, and θ[j] is the j-th value in the parameter
 // vector
 func StochasticGradientAscent(d StochasticAscendable, file string) error {
-	Theta := d.Theta()
-	Alpha := d.LearningRate()
-	MaxIterations := d.MaxIterations()
-	Examples := d.Examples()
+
+	var (
+		Theta          = d.Theta()
+		MaxIterations  = d.MaxIterations()
+		Examples       = d.Examples()
+		LearningDriver = NewCyclicalLearningDriver(d.LearningRate(), d.LearningRateMax(), Examples)
+	)
 
 	//Create an array of training indices
 	r := rand.New(rand.NewSource(2))
@@ -95,20 +98,19 @@ func StochasticGradientAscent(d StochasticAscendable, file string) error {
 		MaxIterations = 250
 	}
 
-	var iter int
-	features := len(Theta)
+	n_features := len(Theta)
 
 	// Stop iterating if the number of iterations exceeds
 	// the limit
-	for ; iter < MaxIterations; iter++ {
+	for iter := 0; iter < MaxIterations; iter++ {
 
-		newTheta := make([]float64, features)
+		newTheta := make([]float64, n_features)
+
 		var error_sum float64 = 0
 		start := time.Now()
 		shuffle(r, indices)
 
 		for trainingIteration := 0; trainingIteration < Examples; trainingIteration++ {
-
 
 			i := indices[trainingIteration]
 
@@ -118,33 +120,13 @@ func StochasticGradientAscent(d StochasticAscendable, file string) error {
 			}
 
 			error_sum += (prediction_error * prediction_error)
-			NewThetaParallel(Theta, d, i, prediction_error, Alpha, newTheta)
-
-			// now simultaneously update Theta
-			weightSum := float64(0)
-			for i := 1; i < len(Theta); i++ {
-				weightSum += (newTheta[i]*newTheta[i])
-			}
-			weightSum = math.Sqrt(weightSum)
-
-			//update bias
-			Theta[0] = newTheta[0]
-
-			//copy normalized theta
-			for i := 1; i < len(Theta); i++ {
-				Theta[i] += newTheta[i] / weightSum
-			}
-
-			if trainingIteration != 0 && trainingIteration%10000 == 0 {
-				normalized_error_sum := (error_sum/float64(trainingIteration)) * float64(Examples)
-				fmt.Println(trainingIteration,
-					time.Now().Sub(start)/time.Duration(trainingIteration),
-						math.Sqrt(normalized_error_sum/float64(Examples)))
-			}
+			NewThetaParallel(Theta, d, i, prediction_error, LearningDriver.Next(), newTheta)
+			copy(Theta, newTheta)
 		}
 
-		fmt.Println("ttd:", time.Now().Sub(start) * time.Duration(MaxIterations - iter))
+		fmt.Println("ttd:", time.Now().Sub(start)*time.Duration(MaxIterations-iter))
 		fmt.Println(iter, "Sqrt(Err^2/N)", math.Sqrt(error_sum/float64(Examples)))
+		fmt.Println("learning iter", LearningDriver.Iter, "of", LearningDriver.RestartIter)
 
 		if file != "" {
 			d.PersistToFile(file)
@@ -186,7 +168,7 @@ func NewThetaParallel(Theta []float64, d StochasticAscendable, i int, prediction
 
 			for j := start; j < end; j++ {
 				dj := d.Dij(i, j, prediction_error)
-				newθ := Theta[j] + (Alpha*dj)
+				newθ := Theta[j] + (Alpha * dj)
 				if math.IsInf(newθ, 0) || math.IsNaN(newθ) {
 					log.Fatalf("Sorry! Learning diverged. Some value of the parameter vector(%d) theta is ±Inf or NaN", j)
 				}
@@ -203,7 +185,7 @@ func NewTheta(Theta []float64, d StochasticAscendable, i int, prediction_error f
 
 	for j := range Theta {
 		dj := d.Dij(i, j, prediction_error)
-		newThetaJ := Theta[j] + (Alpha*dj)
+		newThetaJ := Theta[j] + (Alpha * dj)
 		if math.IsInf(newThetaJ, 0) || math.IsNaN(newThetaJ) {
 			log.Fatalf("Sorry! Learning diverged. Some value of the parameter vector(%d) theta is ±Inf or NaN", j)
 		}

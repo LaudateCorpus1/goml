@@ -154,6 +154,12 @@ type StochasticAscendable interface {
 	// modifier term
 	LearningRate() float64
 
+	// LearningRate returns the learning rate α
+	// to be used in Gradient Descent as the
+	// modifier term
+	LearningRateMax() float64
+
+
 	// Examples returns the number of examples in the
 	// training set the model is using
 	Examples() int
@@ -162,8 +168,7 @@ type StochasticAscendable interface {
 	// J(θ) with respect to the j-th parameter of
 	// the hypothesis, θ[j], for the training example
 	// x[i]. Called as Dij(i,j)
-	Dij(int, int, float64) (float64)
-
+	Dij(int, int, float64) float64
 
 	// calculates the difference between the expected value at i
 	// from the predicted value of i in the training set
@@ -178,7 +183,6 @@ type StochasticAscendable interface {
 	// return after less if strong convergance is
 	// detected, but it'll let the user set a cap.
 	MaxIterations() int
-
 
 	// Save to file after each epoch
 	PersistToFile(path string) error
@@ -210,4 +214,22 @@ type Datapoint struct {
 type TextDatapoint struct {
 	X string `json:"x"`
 	Y uint8  `json:"y"`
+}
+
+type RegularizationType int
+
+const (
+	L1 RegularizationType = 1
+	L2 RegularizationType = 2
+)
+
+func (rt RegularizationType) String() string {
+	switch rt {
+	case 1:
+		return "L1"
+	case 2:
+		return "L2"
+	default:
+		panic("Unkown RegularizationType")
+	}
 }

@@ -201,6 +201,13 @@ func (l *LeastSquares) LearningRate() float64 {
 	return l.alpha
 }
 
+// LearningRate returns the learning rate α for gradient
+// descent to optimize the model. Could vary as a function
+// of something else later, potentially.
+func (l *LeastSquares) LearningRateMax() float64 {
+	return l.alpha
+}
+
 // Examples returns the number of training examples (m)
 // that the model currently is training from.
 func (l *LeastSquares) Examples() int {
