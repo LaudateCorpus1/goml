@@ -279,7 +279,7 @@ func (l *SparseLeastSquares) Learn(file string) error {
 		return err
 	}
 
-	fmt.Fprintf(l.Output, "Training:\n\tModel: SparseLeastSquares Classification\n\tOptimization Method: %v\n\tTraining Examples: %v\n\tFeatures: %v\n\tLearning Rate α: %v-%v\n\tRegularization Parameter λ: %v\n\tRegularization Type: %s\n...\n\n", l.method, examples, len(l.Parameters) - 1, l.alphaMax, l.alpha, l.regularization, l.rt.String())
+	fmt.Fprintf(l.Output, "Training:\n\tModel: SparseLeastSquares Classification\n\tOptimization Method: %v\n\tTraining Examples: %v\n\tFeatures: %v\n\tLearning Rate α: %v-%v\n\tRegularization Parameter λ: %v\n\tRegularization Type: %s\n...\n\n", l.method, examples, len(l.Parameters)-1, l.alphaMax, l.alpha, l.regularization, l.rt.String())
 
 	var err error
 	if l.method == base.BatchGD {
@@ -447,7 +447,7 @@ func (l *SparseLeastSquares) OnlineLearn(errors chan error, dataset chan base.Da
 					// notice that we don't count the
 					// constant term
 					if j != 0 {
-						gradient += l.regularization * l.Parameters[j]
+						gradient -= l.Regularization(j)
 					}
 
 					return gradient, nil
@@ -492,8 +492,7 @@ func (l *SparseLeastSquares) String() string {
 
 	buffer.WriteString(fmt.Sprintf("h(θ,x) = %.3f + ", l.Parameters[0]))
 
-	length := features + 1
-	for i := 1; i < length; i++ {
+	for i := 1; i < len(l.Parameters); i++ {
 		buffer.WriteString(fmt.Sprintf("%.5f(x[%d])", l.Parameters[i], i))
 
 		if i != features {
