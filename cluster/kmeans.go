@@ -234,7 +234,7 @@ func (k *KMeans) Examples() int {
 }
 
 // MaxIterations returns the number of maximum iterations
-// the model will go through in GradientAscent, in the
+// the model will go through in GradientDescent, in the
 // worst case
 func (k *KMeans) MaxIterations() int {
 	return k.maxIterations

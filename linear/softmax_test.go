@@ -99,7 +99,7 @@ func maxI(array []float64) int {
 func TestFourDimensionalSoftmaxShouldPass1(t *testing.T) {
 	var err error
 
-	model := NewSoftmax(base.BatchGA, 1e-5, 0, 3, 10, fdx, fdy)
+	model := NewSoftmax(base.BatchGD, 1e-5, 0, 3, 10, fdx, fdy)
 
 	err = model.Learn()
 	assert.Nil(t, err, "Learning error should be nil")
@@ -148,11 +148,11 @@ func TestFourDimensionalSoftmaxShouldPass1(t *testing.T) {
 	assert.True(t, float64(incorrect)/float64(count) < 0.14, "Accuracy should be greater than 86%")
 }
 
-// same as above but with StochasticGA
+// same as above but with StochasticGD
 func TestFourDimensionalSoftmaxShouldPass2(t *testing.T) {
 	var err error
 
-	model := NewSoftmax(base.StochasticGA, 1e-5, 0, 3, 10, fdx, fdy)
+	model := NewSoftmax(base.StochasticGD, 1e-5, 0, 3, 10, fdx, fdy)
 
 	err = model.Learn()
 	assert.Nil(t, err, "Learning error should be nil")
@@ -205,7 +205,7 @@ func TestFourDimensionalSoftmaxShouldPass2(t *testing.T) {
 func TestFourDimensionalSoftmaxShouldFail1(t *testing.T) {
 	var err error
 
-	model := NewSoftmax(base.BatchGA, 1e-7, 0, 3, 1, fdx, fdy)
+	model := NewSoftmax(base.BatchGD, 1e-7, 0, 3, 1, fdx, fdy)
 
 	err = model.Learn()
 	assert.Nil(t, err, "Learning error should be nil")
@@ -254,11 +254,11 @@ func TestFourDimensionalSoftmaxShouldFail1(t *testing.T) {
 	assert.True(t, float64(incorrect)/float64(count) > 0.1, "Accuracy should be bad (error rate > 0.1)")
 }
 
-// same as above but with StochasticGA
+// same as above but with StochasticGD
 func TestFourDimensionalSoftmaxShouldFail2(t *testing.T) {
 	var err error
 
-	model := NewSoftmax(base.StochasticGA, .000001, 0, 3, 1, fdx, fdy)
+	model := NewSoftmax(base.StochasticGD, .000001, 0, 3, 1, fdx, fdy)
 
 	err = model.Learn()
 	assert.Nil(t, err, "Learning error should be nil")
@@ -311,37 +311,37 @@ func TestFourDimensionalSoftmaxShouldFail2(t *testing.T) {
 func TestFourDimensionalSoftmaxShouldFail3(t *testing.T) {
 	var err error
 
-	model := NewSoftmax(base.BatchGA, 1, 0, 3, 800, [][]float64{}, fdy)
+	model := NewSoftmax(base.BatchGD, 1, 0, 3, 800, [][]float64{}, fdy)
 
 	err = model.Learn()
 	assert.NotNil(t, err, "Learning error should not be nil")
 
-	model = NewSoftmax(base.BatchGA, 1, 0, 3, 800, [][]float64{[]float64{}, []float64{}}, fdy)
+	model = NewSoftmax(base.BatchGD, 1, 0, 3, 800, [][]float64{[]float64{}, []float64{}}, fdy)
 
 	err = model.Learn()
 	assert.NotNil(t, err, "Learning error should not be nil")
 
-	model = NewSoftmax(base.BatchGA, 1, 0, 3, 800, nil, fdy)
+	model = NewSoftmax(base.BatchGD, 1, 0, 3, 800, nil, fdy)
 
 	err = model.Learn()
 	assert.NotNil(t, err, "Learning error should not be nil")
 }
 
-// same as above but with StochasticGA
+// same as above but with StochasticGD
 func TestFourDimensionalSoftmaxShouldFail4(t *testing.T) {
 	var err error
 
-	model := NewSoftmax(base.StochasticGA, 1, 0, 3, 800, [][]float64{}, fdy)
+	model := NewSoftmax(base.StochasticGD, 1, 0, 3, 800, [][]float64{}, fdy)
 
 	err = model.Learn()
 	assert.NotNil(t, err, "Learning error should not be nil")
 
-	model = NewSoftmax(base.BatchGA, 1, 0, 3, 800, [][]float64{[]float64{}, []float64{}}, fdy)
+	model = NewSoftmax(base.BatchGD, 1, 0, 3, 800, [][]float64{[]float64{}, []float64{}}, fdy)
 
 	err = model.Learn()
 	assert.NotNil(t, err, "Learning error should not be nil")
 
-	model = NewSoftmax(base.BatchGA, 1, 0, 3, 800, nil, fdy)
+	model = NewSoftmax(base.BatchGD, 1, 0, 3, 800, nil, fdy)
 
 	err = model.Learn()
 	assert.NotNil(t, err, "Learning error should not be nil")
@@ -351,27 +351,27 @@ func TestFourDimensionalSoftmaxShouldFail4(t *testing.T) {
 func TestFourDimensionalSoftmaxShouldFail5(t *testing.T) {
 	var err error
 
-	model := NewSoftmax(base.BatchGA, 1, 0, 3, 800, fdx, []float64{})
+	model := NewSoftmax(base.BatchGD, 1, 0, 3, 800, fdx, []float64{})
 
 	err = model.Learn()
 	assert.NotNil(t, err, "Learning error should not be nil")
 
-	model = NewSoftmax(base.BatchGA, 1, 0, 3, 800, fdx, nil)
+	model = NewSoftmax(base.BatchGD, 1, 0, 3, 800, fdx, nil)
 
 	err = model.Learn()
 	assert.NotNil(t, err, "Learning error should not be nil")
 }
 
-// same as above but with StochasticGA
+// same as above but with StochasticGD
 func TestFourDimensionalSoftmaxShouldFail6(t *testing.T) {
 	var err error
 
-	model := NewSoftmax(base.StochasticGA, 1, 0, 3, 800, fdx, []float64{})
+	model := NewSoftmax(base.StochasticGD, 1, 0, 3, 800, fdx, []float64{})
 
 	err = model.Learn()
 	assert.NotNil(t, err, "Learning error should not be nil")
 
-	model = NewSoftmax(base.BatchGA, 1, 0, 3, 800, fdx, nil)
+	model = NewSoftmax(base.BatchGD, 1, 0, 3, 800, fdx, nil)
 
 	err = model.Learn()
 	assert.NotNil(t, err, "Learning error should not be nil")
@@ -390,7 +390,7 @@ func TestFourDimensionalSoftmaxShouldFail7(t *testing.T) {
 func TestTwoDimensionalSoftmaxShouldPass1(t *testing.T) {
 	var err error
 
-	model := NewSoftmax(base.BatchGA, .0001, 0, 5, 10, bdx, bdy)
+	model := NewSoftmax(base.BatchGD, .0001, 0, 5, 10, bdx, bdy)
 	err = model.Learn()
 	assert.Nil(t, err, "Learning error should be nil")
 
@@ -440,11 +440,11 @@ func TestTwoDimensionalSoftmaxShouldPass1(t *testing.T) {
 	assert.True(t, float64(incorrect)/float64(count) < 0.35, "Accuracy should be greater than 65% (this is a more challenging model)")
 }
 
-// same as above but with StochasticGA
+// same as above but with StochasticGD
 func TestTwoDimensionalSoftmaxShouldPass2(t *testing.T) {
 	var err error
 
-	model := NewSoftmax(base.StochasticGA, .0001, 0, 5, 10, bdx, bdy)
+	model := NewSoftmax(base.StochasticGD, .0001, 0, 5, 10, bdx, bdy)
 	err = model.Learn()
 	assert.Nil(t, err, "Learning error should be nil")
 
@@ -498,7 +498,7 @@ func TestTwoDimensionalSoftmaxShouldPass2(t *testing.T) {
 func TestTwoDimensionalSoftmaxShouldFail1(t *testing.T) {
 	var err error
 
-	model := NewSoftmax(base.BatchGA, 1e-4, 20, 5, 10, bdx, bdy)
+	model := NewSoftmax(base.BatchGD, 1e-4, 20, 5, 10, bdx, bdy)
 	err = model.Learn()
 	assert.Nil(t, err, "Learning error should be nil")
 
@@ -548,11 +548,11 @@ func TestTwoDimensionalSoftmaxShouldFail1(t *testing.T) {
 	assert.True(t, float64(incorrect)/float64(count) > 0.4, "Accuracy should be worse than 60%")
 }
 
-// same as above but with StochasticGA
+// same as above but with StochasticGD
 func TestTwoDimensionalSoftmaxShouldFail2(t *testing.T) {
 	var err error
 
-	model := NewSoftmax(base.StochasticGA, 1e-5, 2, 5, 10, bdx, bdy)
+	model := NewSoftmax(base.StochasticGD, 1e-5, 2, 5, 10, bdx, bdy)
 	err = model.Learn()
 	assert.Nil(t, err, "Learning error should be nil")
 
@@ -606,7 +606,7 @@ func TestTwoDimensionalSoftmaxShouldFail2(t *testing.T) {
 func TestThreeDimensionalSoftmaxShouldPass1(t *testing.T) {
 	var err error
 
-	model := NewSoftmax(base.BatchGA, 5e-5, 0, 3, 500, tdx, tdy)
+	model := NewSoftmax(base.BatchGD, 5e-5, 0, 3, 500, tdx, tdy)
 	err = model.Learn()
 	assert.Nil(t, err, "Learning error should be nil")
 
@@ -648,11 +648,11 @@ func TestThreeDimensionalSoftmaxShouldPass1(t *testing.T) {
 	assert.True(t, float64(incorrect)/float64(count) < 0.14, "Accuracy should be greater than 86%")
 }
 
-// same as above but with StochasticGA
+// same as above but with StochasticGD
 func TestThreeDimensionalSoftmaxShouldPass2(t *testing.T) {
 	var err error
 
-	model := NewSoftmax(base.StochasticGA, 5e-5, 0, 3, 500, tdx, tdy)
+	model := NewSoftmax(base.StochasticGD, 5e-5, 0, 3, 500, tdx, tdy)
 	err = model.Learn()
 	assert.Nil(t, err, "Learning error should be nil")
 
@@ -701,7 +701,7 @@ func TestThreeDimensionalSoftmaxOnlineShouldPass2(t *testing.T) {
 	stream := make(chan base.Datapoint, 100)
 	errors := make(chan error, 20)
 
-	model := NewSoftmax(base.StochasticGA, 5e-5, 0, 3, 0, nil, nil, 2)
+	model := NewSoftmax(base.StochasticGD, 5e-5, 0, 3, 0, nil, nil, 2)
 
 	go model.OnlineLearn(errors, stream, func(theta [][]float64) {})
 
@@ -792,7 +792,7 @@ func TestThreeDimensionalSoftmaxOnlineNormalizedShouldPass2(t *testing.T) {
 	stream := make(chan base.Datapoint, 100)
 	errors := make(chan error, 20)
 
-	model := NewSoftmax(base.StochasticGA, 5e-5, 0, 3, 0, nil, nil, 2)
+	model := NewSoftmax(base.StochasticGD, 5e-5, 0, 3, 0, nil, nil, 2)
 
 	go model.OnlineLearn(errors, stream, func(theta [][]float64) {}, true)
 
@@ -884,7 +884,7 @@ func TestThreeDimensionalSoftmaxOnlineNormalizedShouldPass2(t *testing.T) {
 func TestPersistSoftmaxShouldPass1(t *testing.T) {
 	var err error
 
-	model := NewSoftmax(base.BatchGA, 5e-5, 0, 3, 500, tdx, tdy)
+	model := NewSoftmax(base.BatchGD, 5e-5, 0, 3, 500, tdx, tdy)
 	err = model.Learn()
 	assert.Nil(t, err, "Learning error should be nil")
 

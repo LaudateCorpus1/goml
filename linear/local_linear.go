@@ -68,7 +68,7 @@ import (
 //         }
 //     }
 //
-//     model := NewLocalLinear(base.StochasticGA, 1e-4, 0, 0.75, 1500, x, y)
+//     model := NewLocalLinear(base.StochasticGD, 1e-4, 0, 0.75, 1500, x, y)
 //
 //     // now when you predict it'll train off the
 //     // dataset, weighting points closer to the
@@ -77,8 +77,8 @@ import (
 //     guess, err := model.Predict([]float64{10.0, -13.666})
 type LocalLinear struct {
 	// alpha and maxIterations are used only for
-	// GradientAscent during learning. If maxIterations
-	// is 0, then GradientAscent will run until the
+	// GradientDescent during learning. If maxIterations
+	// is 0, then GradientDescent will run until the
 	// algorithm detects convergance.
 	//
 	// regularization is used as the regularization
@@ -127,7 +127,7 @@ type LocalLinear struct {
 //     // Max Iterations: 800
 //     // Dataset to learn fron: testX
 //     // Expected results dataset: testY
-//     model := NewLocalLinear(base.StochasticGA, 1e-4, 6, 1.0, 800, testX, testY)
+//     model := NewLocalLinear(base.StochasticGD, 1e-4, 6, 1.0, 800, testX, testY)
 //
 //     err := model.Learn()
 //     if err != nil {
@@ -206,7 +206,7 @@ func (l *LocalLinear) Examples() int {
 }
 
 // MaxIterations returns the number of maximum iterations
-// the model will go through in GradientAscent, in the
+// the model will go through in GradientDescent, in the
 // worst case
 func (l *LocalLinear) MaxIterations() int {
 	return l.maxIterations
@@ -255,7 +255,7 @@ func (l *LocalLinear) Predict(x []float64, normalize ...bool) ([]float64, error)
 	var iter int
 	features := len(l.Parameters)
 
-	if l.method == base.BatchGA {
+	if l.method == base.BatchGD {
 		for ; iter < l.maxIterations; iter++ {
 			newTheta := make([]float64, features)
 			for j := range l.Parameters {
@@ -276,7 +276,7 @@ func (l *LocalLinear) Predict(x []float64, normalize ...bool) ([]float64, error)
 				l.Parameters[j] = newθ
 			}
 		}
-	} else if l.method == base.StochasticGA {
+	} else if l.method == base.StochasticGD {
 		for ; iter < l.maxIterations; iter++ {
 			newTheta := make([]float64, features)
 			for i := 0; i < examples; i++ {

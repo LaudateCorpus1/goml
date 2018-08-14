@@ -42,7 +42,7 @@ func TestLocalLinearShouldPass1(t *testing.T) {
 		}
 	}
 
-	model := NewLocalLinear(base.BatchGA, 1e-4, 0, 0.75, 500, x, y)
+	model := NewLocalLinear(base.BatchGD, 1e-4, 0, 0.75, 500, x, y)
 
 	var count int
 	var err float64
@@ -91,7 +91,7 @@ func TestLocalLinearShouldPass2(t *testing.T) {
 		}
 	}
 
-	model := NewLocalLinear(base.StochasticGA, 1e-4, 0, 0.75, 500, x, y)
+	model := NewLocalLinear(base.StochasticGD, 1e-4, 0, 0.75, 500, x, y)
 
 	var count int
 	var err float64

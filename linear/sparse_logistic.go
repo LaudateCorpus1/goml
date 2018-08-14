@@ -10,6 +10,8 @@ import (
 	"os"
 
 	"github.com/bountylabs/goml/base"
+	"sync"
+	"runtime"
 )
 
 // SparseLogistic represents the logistic classification
@@ -26,8 +28,8 @@ import (
 // x, whether y is 1
 type SparseLogistic struct {
 	// alpha and maxIterations are used only for
-	// GradientAscent during learning. If maxIterations
-	// is 0, then GradientAscent will run until the
+	// GradientDescent during learning. If maxIterations
+	// is 0, then GradientDescent will run until the
 	// algorithm detects convergance.
 	//
 	// regularization is used as the regularization
@@ -50,7 +52,6 @@ type SparseLogistic struct {
 	// vectors, that the model can optimize from
 	trainingSet      []map[int]float64
 	expectedResults  []float64
-	numberOfFeatures int
 
 	Parameters []float64 `json:"theta"`
 
@@ -85,7 +86,7 @@ type SparseLogistic struct {
 //     // Max Iterations: 800
 //     // Dataset to learn fron: testX
 //     // Expected results dataset: testY
-//     model := NewSparseLogistic(base.BatchGA, 1e-4, 6, 800, testX, testY)
+//     model := NewSparseLogistic(base.BatchGD, 1e-4, 6, 800, testX, testY)
 //
 //     err := model.Learn()
 //     if err != nil {
@@ -111,7 +112,6 @@ func NewSparseLogistic(method base.OptimizationMethod, alpha, alphaMax, regulari
 
 		trainingSet:      trainingSet,
 		expectedResults:  expectedResults,
-		numberOfFeatures: numberOfFeatures,
 
 		// initialize θ as the zero vector (that is,
 		// the vector of all zeros)
@@ -167,14 +167,14 @@ func (l *SparseLogistic) Examples() int {
 }
 
 // MaxIterations returns the number of maximum iterations
-// the model will go through in GradientAscent, in the
+// the model will go through in GradientDescent, in the
 // worst case
 func (l *SparseLogistic) MaxIterations() int {
 	return l.maxIterations
 }
 
 func (l *SparseLogistic) TrainingError(i int) (float64, error) {
-	return l.expectedResults[i] - l.PredictSparse(l.trainingSet[i]), nil
+	return l.expectedResults[i]-l.PredictSparse(l.trainingSet[i]), nil
 }
 
 // Predict takes in a variable x (an array of floats,) and
@@ -235,7 +235,7 @@ func (l *SparseLogistic) Learn(file string) error {
 	}
 
 	examples := len(l.trainingSet)
-	if examples == 0 || l.numberOfFeatures == 0 {
+	if examples == 0 || len(l.Parameters) == 0 {
 		err := fmt.Errorf("ERROR: Attempting to learn with no training examples!\n")
 		fmt.Fprintf(l.Output, err.Error())
 		return err
@@ -246,13 +246,13 @@ func (l *SparseLogistic) Learn(file string) error {
 		return err
 	}
 
-	fmt.Fprintf(l.Output, "Training:\n\tModel: SparseLogistic (Binary) Classification\n\tOptimization Method: %v\n\tTraining Examples: %v\n\tFeatures: %v\n\tLearning Rate α: %v-%v\n\tRegularization Parameter λ: %v\n\tRegularization Type: %s\n...\n\n", l.method, examples, l.numberOfFeatures, l.alphaMax, l.alpha, l.regularization, l.rt.String())
+	fmt.Fprintf(l.Output, "Training:\n\tModel: SparseLogistic (Binary) Classification\n\tOptimization Method: %v\n\tTraining Examples: %v\n\tFeatures: %v\n\tLearning Rate α: %v-%v\n\tRegularization Parameter λ: %v\n\tRegularization Type: %s\n...\n\n", l.method, examples, len(l.Parameters) - 1, l.alphaMax, l.alpha, l.regularization, l.rt.String())
 
 	var err error
-	if l.method == base.BatchGA {
-		err = base.GradientAscent(l)
-	} else if l.method == base.StochasticGA {
-		err = base.StochasticGradientAscent(l, file)
+	if l.method == base.BatchGD {
+		err = base.GradientDescent(l, file)
+	} else if l.method == base.StochasticGD {
+		err = base.StochasticGradientDescent(l, file)
 	} else {
 		err = fmt.Errorf("Chose a training method not implemented for SparseLogistic regression")
 	}
@@ -310,9 +310,9 @@ func (l *SparseLogistic) Learn(file string) error {
 //     // (4) in leu of finding that from the dataset
 //     // like you would with batch/stochastic GD
 //     //
-//     // Also – the 'base.StochasticGA' doesn't affect
+//     // Also – the 'base.StochasticGD' doesn't affect
 //     // anything. You could put batch.
-//     model := NewSparseLogistic(base.StochasticGA, .0001, 0, 0, nil, nil, 4)
+//     model := NewSparseLogistic(base.StochasticGD, .0001, 0, 0, nil, nil, 4)
 //
 //     go model.OnlineLearn(errors, stream, func(theta [][]float64) {
 //         // do something with the new theta (persist
@@ -485,11 +485,44 @@ func (l *SparseLogistic) String() string {
 	return buffer.String()
 }
 
+//Used to speed up Batch Gradient Descent
+func (l *SparseLogistic) PredictAll() []float64 {
+	predictions := make([]float64, len(l.trainingSet))
+	n_cores := runtime.NumCPU()
+	wg := &sync.WaitGroup{}
+	wg.Add(n_cores)
+	for core := 0; core < n_cores; core++ {
+
+		go func(core int) {
+
+			/*
+				25 = 101 / 4
+				start = 0 * 25, 1 * 25, 2 * 25, 3 * 25
+				end = 25, 50, 75, 101
+			*/
+
+			nObservationsPerCore := len(l.trainingSet) / n_cores
+			start := core * nObservationsPerCore
+			end := start + nObservationsPerCore
+			if core == n_cores-1 {
+				end = len(l.trainingSet)
+			}
+
+			for i := start; i < end; i++ {
+				predictions[i] = l.PredictSparse(l.trainingSet[i])
+			}
+			wg.Done()
+		}(core)
+	}
+	wg.Wait()
+	return predictions
+}
+
 // Dj returns the partial derivative of the cost function J(θ)
 // with respect to theta[j] where theta is the parameter vector
 // associated with our hypothesis function Predict (upon which
 // we are optimizing
-func (l *SparseLogistic) Dj(j int) (float64, error) {
+func (l *SparseLogistic) Dj(j int, predictions []float64) (float64, error) {
 	if j > len(l.Parameters)-1 {
 		return 0, fmt.Errorf("J (%v) would index out of the bounds of the training set data (len: %v)", j, len(l.Parameters))
 	}
@@ -497,8 +530,6 @@ func (l *SparseLogistic) Dj(j int) (float64, error) {
 	var sum float64
 
 	for i := range l.trainingSet {
-		prediction := l.PredictSparse(l.trainingSet[i])
-
 		// account for constant term
 		// x is x[i][j] via Andrew Ng's terminology
 		var x float64
@@ -508,7 +539,7 @@ func (l *SparseLogistic) Dj(j int) (float64, error) {
 			x = l.trainingSet[i][j-1]
 		}
 
-		sum += (l.expectedResults[i] - prediction) * x
+		sum += (l.expectedResults[i]-predictions[i]) * x
 	}
 
 	// add in the regularization term
@@ -520,7 +551,7 @@ func (l *SparseLogistic) Dj(j int) (float64, error) {
 		sum -= l.Regularization(j)
 	}
 
-	return sum / float64(len(l.trainingSet)), nil
+	return sum, nil
 }
 
 // Dij returns the derivative of the cost function
