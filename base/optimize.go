@@ -207,7 +207,7 @@ func shuffle(r *rand.Rand, x []int) {
 
 func NewThetaParallel(Theta []float64, d StochasticDescendable, i int, prediction_error float64, Alpha float64, newTheta []float64) {
 
-	const n_cores = 4
+	n_cores := runtime.NumCPU()
 	wg := &sync.WaitGroup{}
 	wg.Add(n_cores)
 	for core := 0; core < n_cores; core++ {
