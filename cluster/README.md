@@ -1,5 +1,5 @@
 ## Clustering Algorithms (Supervised and Unsupervised)
-### `import "github.com/cdipaolo/goml/cluster"`
+### `import "github.com/bountylabs/goml/cluster"`
 
 [![GoDoc](https://godoc.org/github.com/cdipaolo/goml/cluster?status.svg)](https://godoc.org/github.com/cdipaolo/goml/cluster)
 

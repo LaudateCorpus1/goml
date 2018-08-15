@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/cdipaolo/goml/base"
+	"github.com/bountylabs/goml/base"
 )
 
 /*

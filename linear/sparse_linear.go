@@ -10,7 +10,7 @@
 // General Usage:
 // Find the model you want to use. Then
 // find the 'NewXXXXXX' function, such as
-//     func NewLeastSquares(method base.OptimizationMethod, alpha, regularization float64, maxIterations int, trainingSet [][]float64, expectedResults []float64) *LeastSquares
+//     func NewSparseLeastSquares(method base.OptimizationMethod, alpha, regularization float64, maxIterations int, trainingSet [][]float64, expectedResults []float64) *SparseLeastSquares
 //
 // load in the given parameters, then run
 //     func Learn() error
@@ -34,7 +34,7 @@
 //     // Max Iterations: 800
 //     // Dataset to learn fron: testX
 //     // Expected results dataset: testY
-//     model := NewLeastSquares(base.BatchGD, 1e-4, 6, 800, testX, testY)
+//     model := NewSparseLeastSquares(base.BatchGD, 1e-4, 6, 800, testX, testY)
 //
 //     err := model.Learn()
 //     if err != nil {
@@ -63,13 +63,13 @@ import (
 	"sync"
 )
 
-// LeastSquares implements a standard linear regression model
+// SparseLeastSquares implements a standard linear regression model
 // with a Least Squares cost function.
 //
 // https://en.wikipedia.org/wiki/Least_squares
 //
 // The model uses gradient descent, NOT regular equations.
-type LeastSquares struct {
+type SparseLeastSquares struct {
 	// alpha and maxIterations are used only for
 	// GradientDescent during learning. If maxIterations
 	// is 0, then GradientDescent will run until the
@@ -81,8 +81,10 @@ type LeastSquares struct {
 	// _no_ data regularization. The higher the term,
 	// the greater the bias on the regression
 	alpha          float64
+	alphaMax       float64
 	regularization float64
 	maxIterations  int
+	rt             base.RegularizationType
 
 	// method is the optimization method used when training
 	// the model
@@ -91,7 +93,7 @@ type LeastSquares struct {
 	// trainingSet and expectedResults are the
 	// 'x', and 'y' of the data, expressed as
 	// vectors, that the model can optimize from
-	trainingSet     [][]float64
+	trainingSet     []map[int]float64
 	expectedResults []float64
 
 	Parameters []float64 `json:"theta"`
@@ -101,7 +103,7 @@ type LeastSquares struct {
 	Output io.Writer
 }
 
-// NewLeastSquares returns a pointer to the linear model
+// NewSparseLeastSquares returns a pointer to the linear model
 // initialized with the learning rate alpha, the training
 // set trainingSet, and the expected results upon which to
 // use the dataset to train, expectedResults.
@@ -119,7 +121,7 @@ type LeastSquares struct {
 //     // Max Iterations: 800
 //     // Dataset to learn from: testX
 //     // Expected results dataset: testY
-//     model := NewLeastSquares(base.StochasticGD, 1e-4, 6, 800, testX, testY)
+//     model := NewSparseLeastSquares(base.StochasticGD, 1e-4, 6, 800, testX, testY)
 //
 //     err := model.Learn()
 //     if err != nil {
@@ -132,19 +134,14 @@ type LeastSquares struct {
 //     if err != nil {
 //         panic("AAAARGGGH! SHIVER ME TIMBERS! THESE ROTTEN SCOUNDRELS FOUND AN ERROR!!!")
 //     }
-func NewLeastSquares(method base.OptimizationMethod, alpha, regularization float64, maxIterations int, trainingSet [][]float64, expectedResults []float64, features ...int) *LeastSquares {
-	var params []float64
-	if len(features) != 0 {
-		params = make([]float64, features[0]+1)
-	} else if trainingSet == nil || len(trainingSet) == 0 {
-		params = []float64{}
-	} else {
-		params = make([]float64, len(trainingSet[0])+1)
-	}
 
-	return &LeastSquares{
+func NewSparseLeastSquares(method base.OptimizationMethod, alpha, alphaMax, regularization float64, rt base.RegularizationType, maxIterations int, trainingSet []map[int]float64, expectedResults []float64, numberOfFeatures int) *SparseLeastSquares {
+
+	return &SparseLeastSquares{
 		alpha:          alpha,
+		alphaMax:       alphaMax,
 		regularization: regularization,
+		rt:             rt,
 		maxIterations:  maxIterations,
 
 		method: method,
@@ -154,7 +151,7 @@ func NewLeastSquares(method base.OptimizationMethod, alpha, regularization float
 
 		// initialize θ as the zero vector (that is,
 		// the vector of all zeros)
-		Parameters: params,
+		Parameters: make([]float64, numberOfFeatures+1),
 
 		Output: os.Stdout,
 	}
@@ -165,7 +162,7 @@ func NewLeastSquares(method base.OptimizationMethod, alpha, regularization float
 // you want to retrain a model starting with the parameter
 // vector of a previous training session, but most of the time
 // wouldn't be used.
-func (l *LeastSquares) UpdateTrainingSet(trainingSet [][]float64, expectedResults []float64) error {
+func (l *SparseLeastSquares) UpdateTrainingSet(trainingSet []map[int]float64, expectedResults []float64) error {
 	if len(trainingSet) == 0 {
 		return fmt.Errorf("Error: length of given training set is 0! Need data!")
 	}
@@ -179,47 +176,41 @@ func (l *LeastSquares) UpdateTrainingSet(trainingSet [][]float64, expectedResult
 	return nil
 }
 
-func (l *LeastSquares) TrainingError(i int) (float64, error) {
-
-	prediction, err := l.Predict(l.trainingSet[i])
-	if err != nil {
-		return 0, err
-	}
-
-	return l.expectedResults[i] - prediction[0], nil
-
+func (l *SparseLeastSquares) TrainingError(i int) (float64, error) {
+	prediction := l.PredictSparse(l.trainingSet[i])
+	return l.expectedResults[i] - prediction, nil
 }
 
 // UpdateLearningRate set's the learning rate of the model
 // to the given float64.
-func (l *LeastSquares) UpdateLearningRate(a float64) {
+func (l *SparseLeastSquares) UpdateLearningRate(a float64) {
 	l.alpha = a
 }
 
 // LearningRate returns the learning rate α for gradient
 // descent to optimize the model. Could vary as a function
 // of something else later, potentially.
-func (l *LeastSquares) LearningRate() float64 {
+func (l *SparseLeastSquares) LearningRate() float64 {
 	return l.alpha
 }
 
 // LearningRate returns the learning rate α for gradient
 // descent to optimize the model. Could vary as a function
 // of something else later, potentially.
-func (l *LeastSquares) LearningRateMax() float64 {
-	return l.alpha
+func (l *SparseLeastSquares) LearningRateMax() float64 {
+	return l.alphaMax
 }
 
 // Examples returns the number of training examples (m)
 // that the model currently is training from.
-func (l *LeastSquares) Examples() int {
+func (l *SparseLeastSquares) Examples() int {
 	return len(l.trainingSet)
 }
 
 // MaxIterations returns the number of maximum iterations
 // the model will go through in GradientDescent, in the
 // worst case
-func (l *LeastSquares) MaxIterations() int {
+func (l *SparseLeastSquares) MaxIterations() int {
 	return l.maxIterations
 }
 
@@ -231,7 +222,7 @@ func (l *LeastSquares) MaxIterations() int {
 // first be normalized to unit length. Only use this if
 // you trained off of normalized inputs and are feeding
 // an un-normalized input
-func (l *LeastSquares) Predict(x []float64, normalize ...bool) ([]float64, error) {
+func (l *SparseLeastSquares) Predict(x []float64, normalize ...bool) ([]float64, error) {
 	if len(x)+1 != len(l.Parameters) {
 		return nil, fmt.Errorf("Error: Parameter vector should be 1 longer than input vector!\n\tLength of x given: %v\n\tLength of parameters: %v\n", len(x), len(l.Parameters))
 	}
@@ -250,10 +241,26 @@ func (l *LeastSquares) Predict(x []float64, normalize ...bool) ([]float64, error
 	return []float64{sum}, nil
 }
 
+func (l *SparseLeastSquares) PredictSparse(x map[int]float64, normalize ...bool) float64 {
+
+	if len(normalize) != 0 && normalize[0] {
+		base.NormalizeSparsePoint(x)
+	}
+
+	// include constant term in sum
+	sum := l.Parameters[0]
+
+	for i, v := range x {
+		sum += v * l.Parameters[i+1]
+	}
+
+	return sum
+}
+
 // Learn takes the struct's dataset and expected results and runs
 // batch gradient descent on them, optimizing theta so you can
 // predict based on those results
-func (l *LeastSquares) Learn() error {
+func (l *SparseLeastSquares) Learn(file string) error {
 	if l.trainingSet == nil || l.expectedResults == nil {
 		err := fmt.Errorf("ERROR: Attempting to learn with no training examples!\n")
 		fmt.Fprintf(l.Output, err.Error())
@@ -261,7 +268,7 @@ func (l *LeastSquares) Learn() error {
 	}
 
 	examples := len(l.trainingSet)
-	if examples == 0 || len(l.trainingSet[0]) == 0 {
+	if examples == 0 || len(l.Parameters) == 0 {
 		err := fmt.Errorf("ERROR: Attempting to learn with no training examples!\n")
 		fmt.Fprintf(l.Output, err.Error())
 		return err
@@ -272,15 +279,15 @@ func (l *LeastSquares) Learn() error {
 		return err
 	}
 
-	fmt.Fprintf(l.Output, "Training:\n\tModel: Logistic (Binary) Classification\n\tOptimization Method: %v\n\tTraining Examples: %v\n\tFeatures: %v\n\tLearning Rate α: %v\n\tRegularization Parameter λ: %v\n...\n\n", l.method, examples, len(l.trainingSet[0]), l.alpha, l.regularization)
+	fmt.Fprintf(l.Output, "Training:\n\tModel: SparseLeastSquares Classification\n\tOptimization Method: %v\n\tTraining Examples: %v\n\tFeatures: %v\n\tLearning Rate α: %v-%v\n\tRegularization Parameter λ: %v\n\tRegularization Type: %s\n...\n\n", l.method, examples, len(l.Parameters)-1, l.alphaMax, l.alpha, l.regularization, l.rt.String())
 
 	var err error
 	if l.method == base.BatchGD {
-		err = base.GradientDescent(l, "")
+		err = base.GradientDescent(l, file)
 	} else if l.method == base.StochasticGD {
-		err = base.StochasticGradientDescent(l, "")
+		err = base.StochasticGradientDescent(l, file)
 	} else {
-		err = fmt.Errorf("Chose a training method not implemented for LeastSquares regression")
+		err = fmt.Errorf("Chose a training method not implemented for SparseLeastSquares regression")
 	}
 
 	if err != nil {
@@ -288,7 +295,7 @@ func (l *LeastSquares) Learn() error {
 		return err
 	}
 
-	fmt.Fprintf(l.Output, "Training Completed.\n%v\n\n", l)
+	fmt.Fprintf(l.Output, "Training Completed.\n")
 	return nil
 }
 
@@ -336,7 +343,7 @@ func (l *LeastSquares) Learn() error {
 //     //
 //     // Also – the 'base.StochasticGD' doesn't affect
 //     // anything. You could put batch.
-//     model := NewLeastSquares(base.StochasticGD, .0001, 0, 0, nil, nil, 4)
+//     model := NewSparseLeastSquares(base.StochasticGD, .0001, 0, 0, nil, nil, 4)
 //
 //     go model.OnlineLearn(errors, stream, func(theta [][]float64) {
 //         // do something with the new theta (persist
@@ -385,7 +392,7 @@ func (l *LeastSquares) Learn() error {
 //     if err != nil {
 //         panic("AAAARGGGH! SHIVER ME TIMBERS! THESE ROTTEN SCOUNDRELS FOUND AN ERROR!!!")
 //     }
-func (l *LeastSquares) OnlineLearn(errors chan error, dataset chan base.Datapoint, onUpdate func([][]float64), normalize ...bool) {
+func (l *SparseLeastSquares) OnlineLearn(errors chan error, dataset chan base.Datapoint, onUpdate func([][]float64), normalize ...bool) {
 	if errors == nil {
 		errors = make(chan error)
 	}
@@ -440,7 +447,7 @@ func (l *LeastSquares) OnlineLearn(errors chan error, dataset chan base.Datapoin
 					// notice that we don't count the
 					// constant term
 					if j != 0 {
-						gradient += l.regularization * l.Parameters[j]
+						gradient -= l.Regularization(j)
 					}
 
 					return gradient, nil
@@ -476,7 +483,7 @@ func (l *LeastSquares) OnlineLearn(errors chan error, dataset chan base.Datapoin
 // String implements the fmt interface for clean printing. Here
 // we're using it to print the model as the equation h(θ)=...
 // where h is the linear hypothesis model
-func (l *LeastSquares) String() string {
+func (l *SparseLeastSquares) String() string {
 	features := len(l.Parameters) - 1
 	if len(l.Parameters) == 0 {
 		fmt.Fprintf(l.Output, "ERROR: Attempting to print model with the 0 vector as it's parameter vector! Train first!\n")
@@ -485,8 +492,7 @@ func (l *LeastSquares) String() string {
 
 	buffer.WriteString(fmt.Sprintf("h(θ,x) = %.3f + ", l.Parameters[0]))
 
-	length := features + 1
-	for i := 1; i < length; i++ {
+	for i := 1; i < len(l.Parameters); i++ {
 		buffer.WriteString(fmt.Sprintf("%.5f(x[%d])", l.Parameters[i], i))
 
 		if i != features {
@@ -498,7 +504,7 @@ func (l *LeastSquares) String() string {
 }
 
 //Used to speed up Batch Gradient Descent
-func (l *LeastSquares) PredictAll() []float64 {
+func (l *SparseLeastSquares) PredictAll() []float64 {
 	predictions := make([]float64, len(l.trainingSet))
 	n_cores := runtime.NumCPU()
 	wg := &sync.WaitGroup{}
@@ -521,11 +527,7 @@ func (l *LeastSquares) PredictAll() []float64 {
 			}
 
 			for i := start; i < end; i++ {
-				prediction, err := l.Predict(l.trainingSet[i])
-				if err != nil {
-					panic(err)
-				}
-				predictions[i] = prediction[0]
+				predictions[i] = l.PredictSparse(l.trainingSet[i])
 			}
 			wg.Done()
 		}(core)
@@ -534,12 +536,11 @@ func (l *LeastSquares) PredictAll() []float64 {
 	return predictions
 }
 
-
 // Dj returns the partial derivative of the cost function J(θ)
 // with respect to theta[j] where theta is the parameter vector
 // associated with our hypothesis function Predict (upon which
 // we are optimizing
-func (l *LeastSquares) Dj(j int, predictions []float64) (float64, error) {
+func (l *SparseLeastSquares) Dj(j int, predictions []float64) (float64, error) {
 	if j > len(l.Parameters)-1 {
 		return 0, fmt.Errorf("J (%v) would index out of the bounds of the training set data (len: %v)", j, len(l.Parameters))
 	}
@@ -580,7 +581,7 @@ func (l *LeastSquares) Dj(j int, predictions []float64) (float64, error) {
 // data they are looking up! (because this is getting
 // called so much, it needs to be efficient with
 // comparisons)
-func (l *LeastSquares) Dij(i int, j int, prediction_error float64) (float64) {
+func (l *SparseLeastSquares) Dij(i int, j int, prediction_error float64) float64 {
 
 	// account for constant term
 	// x is x[i][j] via Andrew Ng's terminology
@@ -600,24 +601,31 @@ func (l *LeastSquares) Dij(i int, j int, prediction_error float64) (float64) {
 	// notice that we don't count the
 	// constant term
 	if j != 0 {
-		gradient -= l.regularization * l.Parameters[j]
+		gradient -= l.Regularization(j)
 	}
 
 	return gradient
 }
 
+func (l *SparseLeastSquares) Regularization(j int) float64 {
+	switch l.rt {
+	case base.L1:
+		return l.regularization * NormAbs(l.Parameters[j])
+	case base.L2:
+		return l.regularization * (l.Parameters[j])
+	default:
+		panic("unkown regularization type")
+	}
+}
+
 // J returns the Least Squares cost function of the given linear
 // model. Could be useful in testing convergence
-func (l *LeastSquares) J() (float64, error) {
+func (l *SparseLeastSquares) J() (float64, error) {
 	var sum float64
 
 	for i := range l.trainingSet {
-		prediction, err := l.Predict(l.trainingSet[i])
-		if err != nil {
-			return 0, err
-		}
-
-		sum += (l.expectedResults[i] - prediction[0]) * (l.expectedResults[i] - prediction[0])
+		prediction := l.PredictSparse(l.trainingSet[i])
+		sum += (l.expectedResults[i] - prediction) * (l.expectedResults[i] - prediction)
 	}
 
 	// add regularization term!
@@ -633,7 +641,7 @@ func (l *LeastSquares) J() (float64, error) {
 // Theta returns the parameter vector θ for use in persisting
 // the model, and optimizing the model through gradient descent
 // ( or other methods like Newton's Method)
-func (l *LeastSquares) Theta() []float64 {
+func (l *SparseLeastSquares) Theta() []float64 {
 	return l.Parameters
 }
 
@@ -645,7 +653,7 @@ func (l *LeastSquares) Theta() []float64 {
 // The data is stored as JSON because it's one of the most
 // efficient storage method (you only need one comma extra
 // per feature + two brackets, total!) And it's extendable.
-func (l *LeastSquares) PersistToFile(path string) error {
+func (l *SparseLeastSquares) PersistToFile(path string) error {
 	if path == "" {
 		return fmt.Errorf("ERROR: you just tried to persist your model to a file with no path!! That's a no-no. Try it with a valid filepath")
 	}
@@ -673,7 +681,7 @@ func (l *LeastSquares) PersistToFile(path string) error {
 // This would be useful in persisting data between running
 // a model on data, or for graphing a dataset with a fit in
 // another framework like Julia/Gadfly.
-func (l *LeastSquares) RestoreFromFile(path string) error {
+func (l *SparseLeastSquares) RestoreFromFile(path string) error {
 	if path == "" {
 		return fmt.Errorf("ERROR: you just tried to restore your model from a file with no path! That's a no-no. Try it with a valid filepath")
 	}

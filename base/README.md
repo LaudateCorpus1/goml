@@ -1,5 +1,5 @@
 ## Base Package
-### `import "github.com/cdipaolo/goml/base"`
+### `import "github.com/bountylabs/goml/base"`
 
 [![GoDoc](https://godoc.org/github.com/cdipaolo/goml/base?status.svg)](https://godoc.org/github.com/cdipaolo/goml/base)
 

@@ -9,7 +9,7 @@ import (
 	"math"
 	"os"
 
-	"github.com/cdipaolo/goml/base"
+	"github.com/bountylabs/goml/base"
 )
 
 // Softmax represents a softmax classification model
@@ -28,8 +28,8 @@ import (
 // passed when creating the model.
 type Softmax struct {
 	// alpha and maxIterations are used only for
-	// GradientAscent during learning. If maxIterations
-	// is 0, then GradientAscent will run until the
+	// GradientDescent during learning. If maxIterations
+	// is 0, then GradientDescent will run until the
 	// algorithm detects convergance.
 	//
 	// regularization is used as the regularization
@@ -152,7 +152,7 @@ func (s *Softmax) Examples() int {
 }
 
 // MaxIterations returns the number of maximum iterations
-// the model will go through in GradientAscent, in the
+// the model will go through in GradientDescent, in the
 // worst case
 func (s *Softmax) MaxIterations() int {
 	return s.maxIterations
@@ -217,7 +217,7 @@ func (s *Softmax) Learn() error {
 	fmt.Fprintf(s.Output, "Training:\n\tModel: Softmax Classification\n\tOptimization Method: %v\n\tTraining Examples: %v\n\t Classification Dimensions: %v\n\tFeatures: %v\n\tLearning Rate α: %v\n\tRegularization Parameter λ: %v\n...\n\n", s.method, examples, s.k, len(s.trainingSet[0]), s.alpha, s.regularization)
 
 	var err error
-	if s.method == base.BatchGA {
+	if s.method == base.BatchGD {
 		err = func() error {
 			// if the iterations given is 0, set it to be
 			// 5000 (seems reasonable base value)
@@ -257,7 +257,7 @@ func (s *Softmax) Learn() error {
 
 			return nil
 		}()
-	} else if s.method == base.StochasticGA {
+	} else if s.method == base.StochasticGD {
 		err = func() error {
 			// if the iterations given is 0, set it to be
 			// 5000 (seems reasonable base value)
@@ -355,9 +355,9 @@ func (s *Softmax) Learn() error {
 //     // (2) in leu of finding that from the dataset
 //     // like you would with batch/stochastic GD
 //     //
-//     // Also – the 'base.StochasticGA' doesn't affect
+//     // Also – the 'base.StochasticGD' doesn't affect
 //     // anything. You could put batch or any other model.
-//     model := NewSoftmax(base.StochasticGA, 5e-5, 0, 3, 0, nil, nil, 2)
+//     model := NewSoftmax(base.StochasticGD, 5e-5, 0, 3, 0, nil, nil, 2)
 //
 //     go model.OnlineLearn(errors, stream, func(theta [][]float64) {
 //         // do something with the new theta (persist

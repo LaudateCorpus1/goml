@@ -9,7 +9,9 @@ import (
 	"math"
 	"os"
 
-	"github.com/cdipaolo/goml/base"
+	"github.com/bountylabs/goml/base"
+	"runtime"
+	"sync"
 )
 
 // Logistic represents the logistic classification
@@ -26,8 +28,8 @@ import (
 // x, whether y is 1
 type Logistic struct {
 	// alpha and maxIterations are used only for
-	// GradientAscent during learning. If maxIterations
-	// is 0, then GradientAscent will run until the
+	// GradientDescent during learning. If maxIterations
+	// is 0, then GradientDescent will run until the
 	// algorithm detects convergance.
 	//
 	// regularization is used as the regularization
@@ -82,7 +84,7 @@ type Logistic struct {
 //     // Max Iterations: 800
 //     // Dataset to learn fron: testX
 //     // Expected results dataset: testY
-//     model := NewLogistic(base.BatchGA, 1e-4, 6, 800, testX, testY)
+//     model := NewLogistic(base.BatchGD, 1e-4, 6, 800, testX, testY)
 //
 //     err := model.Learn()
 //     if err != nil {
@@ -155,6 +157,13 @@ func (l *Logistic) LearningRate() float64 {
 	return l.alpha
 }
 
+// LearningRate returns the learning rate α for gradient
+// descent to optimize the model. Could vary as a function
+// of something else later, potentially.
+func (l *Logistic) LearningRateMax() float64 {
+	return l.alpha
+}
+
 // Examples returns the number of training examples (m)
 // that the model currently is training from.
 func (l *Logistic) Examples() int {
@@ -162,10 +171,21 @@ func (l *Logistic) Examples() int {
 }
 
 // MaxIterations returns the number of maximum iterations
-// the model will go through in GradientAscent, in the
+// the model will go through in GradientDescent, in the
 // worst case
 func (l *Logistic) MaxIterations() int {
 	return l.maxIterations
+}
+
+func (l *Logistic) TrainingError(i int) (float64, error) {
+
+	prediction, err := l.PredictCheap(l.trainingSet[i])
+	if err != nil {
+		return 0, err
+	}
+
+	return l.expectedResults[i] - prediction, nil
+
 }
 
 // Predict takes in a variable x (an array of floats,) and
@@ -177,8 +197,16 @@ func (l *Logistic) MaxIterations() int {
 // you trained off of normalized inputs and are feeding
 // an un-normalized input
 func (l *Logistic) Predict(x []float64, normalize ...bool) ([]float64, error) {
+	result, err := l.PredictCheap(x, normalize...)
+	if err != nil {
+		return nil, err
+	}
+	return []float64{result}, nil
+}
+
+func (l *Logistic) PredictCheap(x []float64, normalize ...bool) (float64, error) {
 	if len(x)+1 != len(l.Parameters) {
-		return nil, fmt.Errorf("Error: Parameter vector should be 1 longer than input vector!\n\tLength of x given: %v\n\tLength of parameters: %v\n", len(x), len(l.Parameters))
+		return 0, fmt.Errorf("Error: Parameter vector should be 1 longer than input vector!\n\tLength of x given: %v\n\tLength of parameters: %v\n", len(x), len(l.Parameters))
 	}
 
 	if len(normalize) != 0 && normalize[0] {
@@ -194,7 +222,7 @@ func (l *Logistic) Predict(x []float64, normalize ...bool) ([]float64, error) {
 
 	result := 1 / (1 + math.Exp(-sum))
 
-	return []float64{result}, nil
+	return result, nil
 }
 
 // Learn takes the struct's dataset and expected results and runs
@@ -222,10 +250,10 @@ func (l *Logistic) Learn() error {
 	fmt.Fprintf(l.Output, "Training:\n\tModel: Logistic (Binary) Classification\n\tOptimization Method: %v\n\tTraining Examples: %v\n\tFeatures: %v\n\tLearning Rate α: %v\n\tRegularization Parameter λ: %v\n...\n\n", l.method, examples, len(l.trainingSet[0]), l.alpha, l.regularization)
 
 	var err error
-	if l.method == base.BatchGA {
-		err = base.GradientAscent(l)
-	} else if l.method == base.StochasticGA {
-		err = base.StochasticGradientAscent(l)
+	if l.method == base.BatchGD {
+		err = base.GradientDescent(l, "")
+	} else if l.method == base.StochasticGD {
+		err = base.StochasticGradientDescent(l, "")
 	} else {
 		err = fmt.Errorf("Chose a training method not implemented for Logistic regression")
 	}
@@ -283,9 +311,9 @@ func (l *Logistic) Learn() error {
 //     // (4) in leu of finding that from the dataset
 //     // like you would with batch/stochastic GD
 //     //
-//     // Also – the 'base.StochasticGA' doesn't affect
+//     // Also – the 'base.StochasticGD' doesn't affect
 //     // anything. You could put batch.
-//     model := NewLogistic(base.StochasticGA, .0001, 0, 0, nil, nil, 4)
+//     model := NewLogistic(base.StochasticGD, .0001, 0, 0, nil, nil, 4)
 //
 //     go model.OnlineLearn(errors, stream, func(theta [][]float64) {
 //         // do something with the new theta (persist
@@ -458,11 +486,49 @@ func (l *Logistic) String() string {
 	return buffer.String()
 }
 
+//Used to speed up Batch Gradient Descent
+func (l *Logistic) PredictAll() []float64 {
+	predictions := make([]float64, len(l.trainingSet))
+	n_cores := runtime.NumCPU()
+	wg := &sync.WaitGroup{}
+	wg.Add(n_cores)
+	for core := 0; core < n_cores; core++ {
+
+		go func(core int) {
+
+			/*
+				25 = 101 / 4
+				start = 0 * 25, 1 * 25, 2 * 25, 3 * 25
+				end = 25, 50, 75, 101
+			*/
+
+			nObservationsPerCore := len(l.trainingSet) / n_cores
+			start := core * nObservationsPerCore
+			end := start + nObservationsPerCore
+			if core == n_cores-1 {
+				end = len(l.trainingSet)
+			}
+
+			for i := start; i < end; i++ {
+				prediction, err := l.Predict(l.trainingSet[i])
+				if err != nil {
+					panic(err)
+				}
+				predictions[i] = prediction[0]
+			}
+			wg.Done()
+		}(core)
+	}
+	wg.Wait()
+	return predictions
+}
+
+
 // Dj returns the partial derivative of the cost function J(θ)
 // with respect to theta[j] where theta is the parameter vector
 // associated with our hypothesis function Predict (upon which
 // we are optimizing
-func (l *Logistic) Dj(j int) (float64, error) {
+func (l *Logistic) Dj(j int, predictions []float64) (float64, error) {
 	if j > len(l.Parameters)-1 {
 		return 0, fmt.Errorf("J (%v) would index out of the bounds of the training set data (len: %v)", j, len(l.Parameters))
 	}
@@ -470,11 +536,6 @@ func (l *Logistic) Dj(j int) (float64, error) {
 	var sum float64
 
 	for i := range l.trainingSet {
-		prediction, err := l.Predict(l.trainingSet[i])
-		if err != nil {
-			return 0, err
-		}
-
 		// account for constant term
 		// x is x[i][j] via Andrew Ng's terminology
 		var x float64
@@ -484,7 +545,7 @@ func (l *Logistic) Dj(j int) (float64, error) {
 			x = l.trainingSet[i][j-1]
 		}
 
-		sum += (l.expectedResults[i] - prediction[0]) * x
+		sum += (l.expectedResults[i] - predictions[i]) * x
 	}
 
 	// add in the regularization term
@@ -493,7 +554,7 @@ func (l *Logistic) Dj(j int) (float64, error) {
 	// notice that we don't count the
 	// constant term
 	if j != 0 {
-		sum += l.regularization * l.Parameters[j]
+		sum -= l.regularization * l.Parameters[j]
 	}
 
 	return sum, nil
@@ -508,11 +569,7 @@ func (l *Logistic) Dj(j int) (float64, error) {
 // data they are looking up! (because this is getting
 // called so much, it needs to be efficient with
 // comparisons)
-func (l *Logistic) Dij(i int, j int) (float64, error) {
-	prediction, err := l.Predict(l.trainingSet[i])
-	if err != nil {
-		return 0, err
-	}
+func (l *Logistic) Dij(i int, j int, prediction_error float64) float64 {
 
 	// account for constant term
 	// x is x[i][j] via Andrew Ng's terminology
@@ -523,8 +580,8 @@ func (l *Logistic) Dij(i int, j int) (float64, error) {
 		x = l.trainingSet[i][j-1]
 	}
 
-	var gradient float64
-	gradient = (l.expectedResults[i] - prediction[0]) * x
+
+	gradient := prediction_error * x
 
 	// add in the regularization term
 	// λ*θ[j]
@@ -532,10 +589,10 @@ func (l *Logistic) Dij(i int, j int) (float64, error) {
 	// notice that we don't count the
 	// constant term
 	if j != 0 {
-		gradient += l.regularization * l.Parameters[j]
+		gradient -= l.regularization * l.Parameters[j]
 	}
 
-	return gradient, nil
+	return gradient
 }
 
 // Theta returns the parameter vector θ for use in persisting

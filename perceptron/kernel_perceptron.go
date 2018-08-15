@@ -7,7 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/cdipaolo/goml/base"
+	"github.com/bountylabs/goml/base"
 )
 
 // KernelPerceptron represents the perceptron online

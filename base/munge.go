@@ -39,3 +39,27 @@ func NormalizePoint(x []float64) {
 		x[i] /= mag
 	}
 }
+
+// NormalizeSparsePoint is the same as Normalize,
+// but it only operates on one singular datapoint,
+// normalizing it's value to unit length.
+func NormalizeSparsePoint(x map[int]float64) {
+
+	var sum float64
+	for i := range x {
+		sum += x[i] * x[i]
+	}
+
+	mag := math.Sqrt(sum)
+
+	for i := range x {
+		if math.IsInf(x[i]/mag, 0) || math.IsNaN(x[i]/mag) {
+			// fallback to zero when dividing by 0
+			x[i] = 0
+			continue
+		}
+
+		x[i] /= mag
+	}
+}
+

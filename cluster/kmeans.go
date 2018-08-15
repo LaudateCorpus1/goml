@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/cdipaolo/goml/base"
+	"github.com/bountylabs/goml/base"
 )
 
 // diff returns the square magnitude of the
@@ -234,7 +234,7 @@ func (k *KMeans) Examples() int {
 }
 
 // MaxIterations returns the number of maximum iterations
-// the model will go through in GradientAscent, in the
+// the model will go through in GradientDescent, in the
 // worst case
 func (k *KMeans) MaxIterations() int {
 	return k.maxIterations
@@ -518,7 +518,7 @@ func (k *KMeans) OnlineLearn(errors chan error, dataset chan base.Datapoint, onU
 
 		if more {
 			if len(point.X) != features {
-				errors <- fmt.Errorf("ERROR: point.X must have the same dimensions as clusters (len %v). Point: %v", point)
+				errors <- fmt.Errorf("ERROR: point.X must have the same dimensions as clusters Point: %v", point)
 			}
 
 			minDiff := diff(point.X, k.Centroids[0])

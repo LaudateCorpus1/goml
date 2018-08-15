@@ -15,8 +15,8 @@ type OptimizationMethod string
 // Constants declare the types of optimization
 // methods you can use.
 const (
-	BatchGA      OptimizationMethod = "Batch Gradient Ascent"
-	StochasticGA                    = "Stochastic Gradient Descent"
+	BatchGD      OptimizationMethod = "Batch Gradient Descent"
+	StochasticGD                    = "Stochastic Gradient Descent"
 )
 
 // Model is an interface that can Train based on
@@ -33,6 +33,9 @@ type Model interface {
 	// vector unit length. Use (and only use) this
 	// if you trained on normalized inputs.
 	Predict([]float64, ...bool) ([]float64, error)
+
+	//Only implemented by SparseLogistic and SparseLinear
+	PredictSparse(map[int]float64, ...bool) (float64)
 
 	// PersistToFile and RestoreFromFile both take
 	// in paths (absolute paths!) to files and
@@ -116,12 +119,12 @@ type OnlineTextModel interface {
 	RestoreFromFile(string) error
 }
 
-// Ascendable is an interface that can be used
+// Descendable is an interface that can be used
 // with batch gradient descent where the parameter
 // vector theta is in one dimension only (so
 // softmax regression would need it's own model,
 // for example)
-type Ascendable interface {
+type Descendable interface {
 	// LearningRate returns the learning rate α
 	// to be used in Gradient Descent as the
 	// modifier term
@@ -130,7 +133,8 @@ type Ascendable interface {
 	// Dj returns the derivative of the cost function
 	// J(θ) with respect to the j-th parameter of
 	// the hypothesis, θ[j]. Called as Dj(j)
-	Dj(int) (float64, error)
+	// we precompute all predictions as an optimization
+	Dj(int, []float64) (float64, error)
 
 	// Theta returns a pointer to the parameter vector
 	// theta, which is 1D vector of floats
@@ -141,18 +145,30 @@ type Ascendable interface {
 	// return after less if strong convergance is
 	// detected, but it'll let the user set a cap.
 	MaxIterations() int
+
+	// Save to file after each epoch
+	PersistToFile(path string) error
+
+	// Used to speed up Batch Gradient Descent
+	PredictAll() []float64
 }
 
-// StochasticAscendable is an interface that can be used
+// StochasticDescendable is an interface that can be used
 // with stochastic gradient descent where the parameter
 // vector theta is in one dimension only (so
 // softmax regression would need it's own model,
 // for example)
-type StochasticAscendable interface {
+type StochasticDescendable interface {
 	// LearningRate returns the learning rate α
 	// to be used in Gradient Descent as the
 	// modifier term
 	LearningRate() float64
+
+	// LearningRate returns the learning rate α
+	// to be used in Gradient Descent as the
+	// modifier term
+	LearningRateMax() float64
+
 
 	// Examples returns the number of examples in the
 	// training set the model is using
@@ -162,7 +178,11 @@ type StochasticAscendable interface {
 	// J(θ) with respect to the j-th parameter of
 	// the hypothesis, θ[j], for the training example
 	// x[i]. Called as Dij(i,j)
-	Dij(int, int) (float64, error)
+	Dij(int, int, float64) float64
+
+	// calculates the difference between the expected value at i
+	// from the predicted value of i in the training set
+	TrainingError(i int) (float64, error)
 
 	// Theta returns a pointer to the parameter vector
 	// theta, which is 1D vector of floats
@@ -173,6 +193,9 @@ type StochasticAscendable interface {
 	// return after less if strong convergance is
 	// detected, but it'll let the user set a cap.
 	MaxIterations() int
+
+	// Save to file after each epoch
+	PersistToFile(path string) error
 }
 
 // Datapoint is used in some models where it is cleaner
@@ -201,4 +224,22 @@ type Datapoint struct {
 type TextDatapoint struct {
 	X string `json:"x"`
 	Y uint8  `json:"y"`
+}
+
+type RegularizationType int
+
+const (
+	L1 RegularizationType = 1
+	L2 RegularizationType = 2
+)
+
+func (rt RegularizationType) String() string {
+	switch rt {
+	case 1:
+		return "L1"
+	case 2:
+		return "L2"
+	default:
+		panic("Unkown RegularizationType")
+	}
 }
