@@ -39,7 +39,7 @@ func GradientDescent(d Descendable, file string) error {
 
 		start := time.Now()
 
-		predictions := d.PredictAll()
+		predictions, rmse := d.PredictAll()
 		newTheta, err := BatchNewThetaParallel(Theta, d, Alpha, predictions)
 		if err != nil {
 			return err
@@ -48,7 +48,7 @@ func GradientDescent(d Descendable, file string) error {
 		// now simultaneously update Theta
 		copy(Theta, newTheta)
 
-		fmt.Println("ttd:", time.Now().Sub(start)*time.Duration(MaxIterations-(iter + 1)))
+		fmt.Println("ttd:", time.Now().Sub(start)*time.Duration(MaxIterations-(iter + 1)), rmse)
 		if file != "" {
 			d.PersistToFile(file)
 		}

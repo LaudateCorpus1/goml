@@ -150,7 +150,7 @@ type Descendable interface {
 	PersistToFile(path string) error
 
 	// Used to speed up Batch Gradient Descent
-	PredictAll() []float64
+	PredictAll() ([]float64, float64)
 }
 
 // StochasticDescendable is an interface that can be used

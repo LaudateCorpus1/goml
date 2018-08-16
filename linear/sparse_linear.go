@@ -504,9 +504,13 @@ func (l *SparseLeastSquares) String() string {
 }
 
 //Used to speed up Batch Gradient Descent
-func (l *SparseLeastSquares) PredictAll() []float64 {
-	predictions := make([]float64, len(l.trainingSet))
+func (l *SparseLeastSquares) PredictAll() ([]float64, float64) {
+
 	n_cores := runtime.NumCPU()
+	predictions := make([]float64, len(l.trainingSet))
+	errors := make([]float64, n_cores)
+
+
 	wg := &sync.WaitGroup{}
 	wg.Add(n_cores)
 	for core := 0; core < n_cores; core++ {
@@ -528,12 +532,21 @@ func (l *SparseLeastSquares) PredictAll() []float64 {
 
 			for i := start; i < end; i++ {
 				predictions[i] = l.PredictSparse(l.trainingSet[i])
+				prediction_error := l.expectedResults[i] - predictions[i]
+				errors[core] += (prediction_error * prediction_error)
 			}
 			wg.Done()
 		}(core)
 	}
 	wg.Wait()
-	return predictions
+
+	//fan in error results
+	var error_sum float64 = 0
+	for _, core_err := range errors {
+		error_sum += core_err
+	}
+
+	return predictions, math.Sqrt(error_sum/float64(len(predictions)))
 }
 
 // Dj returns the partial derivative of the cost function J(θ)
@@ -566,7 +579,7 @@ func (l *SparseLeastSquares) Dj(j int, predictions []float64) (float64, error) {
 	// notice that we don't count the
 	// constant term
 	if j != 0 {
-		sum -= l.regularization * l.Parameters[j]
+		sum -= l.Regularization(j)
 	}
 
 	return sum, nil
