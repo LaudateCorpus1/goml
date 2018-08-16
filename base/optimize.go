@@ -65,7 +65,7 @@ func BatchNewTheta(Theta []float64, d Descendable, Alpha float64, predictions []
 		if err != nil {
 			return nil, err
 		}
-		newTheta[j] = Theta[j] + Alpha*dj
+		newTheta[j] = Theta[j] - Alpha*dj
 	}
 	return newTheta, nil
 }
@@ -98,7 +98,7 @@ func BatchNewThetaParallel(Theta []float64, d Descendable, Alpha float64, predic
 				if err != nil {
 					panic(err)
 				}
-				newTheta[j] = Theta[j] + Alpha*dj
+				newTheta[j] = Theta[j] - Alpha*dj
 			}
 			wg.Done()
 		}(core)

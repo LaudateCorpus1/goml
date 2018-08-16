@@ -570,10 +570,10 @@ func (l *SparseLeastSquares) Dj(j int, predictions []float64) (float64, error) {
 			x = l.trainingSet[i][j-1]
 		}
 
-		sum += (l.expectedResults[i] - predictions[i]) * x
+		sum += 2.0 * (predictions[i] - l.expectedResults[i]) * x
 	}
 
-	sum /= float64(len(predictions))
+	sum /= float64(len(l.trainingSet))
 
 	// add in the regularization term
 	// λ*θ[j]
@@ -581,7 +581,7 @@ func (l *SparseLeastSquares) Dj(j int, predictions []float64) (float64, error) {
 	// notice that we don't count the
 	// constant term
 	if j != 0 {
-		sum -= l.Regularization(j)
+		sum += l.Regularization(j)
 	}
 
 	return sum, nil
@@ -627,7 +627,7 @@ func (l *SparseLeastSquares) Regularization(j int) float64 {
 	case base.L1:
 		return l.regularization * NormAbs(l.Parameters[j])
 	case base.L2:
-		return l.regularization * (l.Parameters[j])
+		return 2 * l.regularization * (l.Parameters[j])
 	default:
 		panic("unkown regularization type")
 	}
