@@ -573,6 +573,8 @@ func (l *SparseLeastSquares) Dj(j int, predictions []float64) (float64, error) {
 		sum += (l.expectedResults[i] - predictions[i]) * x
 	}
 
+	sum /= float64(len(predictions))
+
 	// add in the regularization term
 	// λ*θ[j]
 	//
