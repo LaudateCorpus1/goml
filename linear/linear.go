@@ -93,6 +93,7 @@ type LeastSquares struct {
 	// vectors, that the model can optimize from
 	trainingSet     [][]float64
 	expectedResults []float64
+	logistic        bool
 
 	Parameters []float64 `json:"theta"`
 
@@ -132,7 +133,16 @@ type LeastSquares struct {
 //     if err != nil {
 //         panic("AAAARGGGH! SHIVER ME TIMBERS! THESE ROTTEN SCOUNDRELS FOUND AN ERROR!!!")
 //     }
+
+func NewLogistic(method base.OptimizationMethod, alpha, regularization float64, maxIterations int, trainingSet [][]float64, expectedResults []float64, features ...int) *LeastSquares {
+	return newLeastSquares(method, alpha, regularization, true, maxIterations, trainingSet, expectedResults, features...)
+}
+
 func NewLeastSquares(method base.OptimizationMethod, alpha, regularization float64, maxIterations int, trainingSet [][]float64, expectedResults []float64, features ...int) *LeastSquares {
+	return newLeastSquares(method, alpha, regularization, false, maxIterations, trainingSet, expectedResults, features...)
+}
+
+func newLeastSquares(method base.OptimizationMethod, alpha, regularization float64, logistic bool, maxIterations int, trainingSet [][]float64, expectedResults []float64, features ...int) *LeastSquares {
 	var params []float64
 	if len(features) != 0 {
 		params = make([]float64, features[0]+1)
@@ -151,6 +161,7 @@ func NewLeastSquares(method base.OptimizationMethod, alpha, regularization float
 
 		trainingSet:     trainingSet,
 		expectedResults: expectedResults,
+		logistic:        logistic,
 
 		// initialize θ as the zero vector (that is,
 		// the vector of all zeros)
@@ -206,6 +217,7 @@ func (l *LeastSquares) LearningRate() float64 {
 // LearningRate returns the learning rate α for gradient
 // descent to optimize the model. Could vary as a function
 // of something else later, potentially.
+//TODO switch to cyclical learning rate driver
 func (l *LeastSquares) LearningRateMax() float64 {
 	return l.alpha
 }
@@ -247,18 +259,27 @@ func (l *LeastSquares) Predict(x []float64, normalize ...bool) ([]float64, error
 		sum += x[i] * l.Parameters[i+1]
 	}
 
+	if l.logistic {
+		sum = 1 / (1 + math.Exp(-sum))
+	}
+
 	return []float64{sum}, nil
 }
 
-func (l *LeastSquares) PredictCheap(x []float64) (float64) {
+func (l *LeastSquares) PredictCheap(x []float64) float64 {
+
 	// include constant term in sum
 	sum := l.Parameters[0]
 	for i := range x {
 		sum += x[i] * l.Parameters[i+1]
 	}
+
+	if l.logistic {
+		sum = 1 / (1 + math.Exp(-sum))
+	}
+
 	return sum
 }
-
 
 // Learn takes the struct's dataset and expected results and runs
 // batch gradient descent on them, optimizing theta so you can
@@ -282,7 +303,7 @@ func (l *LeastSquares) Learn() error {
 		return err
 	}
 
-	fmt.Fprintf(l.Output, "Training:\n\tModel: Logistic (Binary) Classification\n\tOptimization Method: %v\n\tTraining Examples: %v\n\tFeatures: %v\n\tLearning Rate α: %v\n\tRegularization Parameter λ: %v\n...\n\n", l.method, examples, len(l.trainingSet[0]), l.alpha, l.regularization)
+	fmt.Fprintf(l.Output, "Training:\n\tModel: LeastSquares Classification\n\tOptimization Method: %v\n\tTraining Examples: %v\n\tLogistic: %v\n\tFeatures: %v\n\tLearning Rate α: %v-%v\n\tRegularization Parameter λ: %v\n\tRegularization Type: %s\n...\n\n", l.method, examples, l.logistic, len(l.Parameters)-1, l.alpha, l.alpha, l.regularization, base.L2)
 
 	var err error
 	if l.method == base.BatchGD {
@@ -427,6 +448,7 @@ func (l *LeastSquares) OnlineLearn(errors chan error, dataset chan base.Datapoin
 				// to have a new function instead of calling
 				// Dij(i, j))
 				dj, err := func(point base.Datapoint, j int) (float64, error) {
+
 					prediction, err := l.Predict(point.X)
 					if err != nil {
 						return 0, err
@@ -442,7 +464,7 @@ func (l *LeastSquares) OnlineLearn(errors chan error, dataset chan base.Datapoin
 					}
 
 					var gradient float64
-					gradient = (point.Y[0] - prediction[0]) * x
+					gradient = (point.Y[0]-prediction[0]) * x
 
 					// add in the regularization term
 					// λ*θ[j]
@@ -460,7 +482,7 @@ func (l *LeastSquares) OnlineLearn(errors chan error, dataset chan base.Datapoin
 					continue
 				}
 
-				newTheta[j] = l.Parameters[j] + l.alpha*dj
+				newTheta[j] = l.Parameters[j] + (l.alpha*dj)
 			}
 
 			// now simultaneously update Theta
@@ -508,16 +530,21 @@ func (l *LeastSquares) String() string {
 }
 
 //Used to speed up Batch Gradient Descent
-//Used to speed up Batch Gradient Descent
 func (l *LeastSquares) PredictAll() ([]float64, float64) {
 
 	n_cores := runtime.NumCPU()
 	predictions := make([]float64, len(l.trainingSet))
+	if len(predictions) < n_cores {
+		n_cores = len(predictions)
+	}
+	//nObservationsPerCore is always >= 1
+	nObservationsPerCore := int(math.Ceil(float64(len(l.trainingSet)) / float64(n_cores)))
+
+
 	errors := make([]float64, n_cores)
-
-
 	wg := &sync.WaitGroup{}
 	wg.Add(n_cores)
+
 	for core := 0; core < n_cores; core++ {
 
 		go func(core int) {
@@ -528,10 +555,10 @@ func (l *LeastSquares) PredictAll() ([]float64, float64) {
 				end = 25, 50, 75, 101
 			*/
 
-			nObservationsPerCore := len(l.trainingSet) / n_cores
+			//nObservationsPerCore is always >= 1
 			start := core * nObservationsPerCore
 			end := start + nObservationsPerCore
-			if core == n_cores-1 {
+			if end > len(l.trainingSet) { //core == last core
 				end = len(l.trainingSet)
 			}
 
@@ -551,9 +578,8 @@ func (l *LeastSquares) PredictAll() ([]float64, float64) {
 		error_sum += core_err
 	}
 
-	return predictions, math.Sqrt(error_sum/float64(len(predictions)))
+	return predictions, math.Sqrt(error_sum / float64(len(predictions)))
 }
-
 
 // Dj returns the partial derivative of the cost function J(θ)
 // with respect to theta[j] where theta is the parameter vector
@@ -576,8 +602,10 @@ func (l *LeastSquares) Dj(j int, predictions []float64) (float64, error) {
 			x = l.trainingSet[i][j-1]
 		}
 
-		sum += (l.expectedResults[i] - predictions[i]) * x
+		sum += 2 * (predictions[i] - l.expectedResults[i]) * x
 	}
+
+	sum /= float64(len(l.trainingSet))
 
 	// add in the regularization term
 	// λ*θ[j]
@@ -585,7 +613,7 @@ func (l *LeastSquares) Dj(j int, predictions []float64) (float64, error) {
 	// notice that we don't count the
 	// constant term
 	if j != 0 {
-		sum -= l.regularization * l.Parameters[j]
+		sum += 2 * l.regularization * l.Parameters[j]
 	}
 
 	return sum, nil
@@ -600,7 +628,7 @@ func (l *LeastSquares) Dj(j int, predictions []float64) (float64, error) {
 // data they are looking up! (because this is getting
 // called so much, it needs to be efficient with
 // comparisons)
-func (l *LeastSquares) Dij(i int, j int, prediction_error float64) (float64) {
+func (l *LeastSquares) Dij(i int, j int, prediction_error float64) float64 {
 
 	// account for constant term
 	// x is x[i][j] via Andrew Ng's terminology
@@ -611,8 +639,8 @@ func (l *LeastSquares) Dij(i int, j int, prediction_error float64) (float64) {
 		x = l.trainingSet[i][j-1]
 	}
 
-	var gradient float64
-	gradient = prediction_error * x
+	//prediction error = expected - predicted, the update function should be 2(predicted - expected) * x
+	var gradient float64 = 2.0 * (-prediction_error) * x
 
 	// add in the regularization term
 	// λ*θ[j]
@@ -620,7 +648,7 @@ func (l *LeastSquares) Dij(i int, j int, prediction_error float64) (float64) {
 	// notice that we don't count the
 	// constant term
 	if j != 0 {
-		gradient -= l.regularization * l.Parameters[j]
+		gradient += 2.0 * l.regularization * l.Parameters[j]
 	}
 
 	return gradient

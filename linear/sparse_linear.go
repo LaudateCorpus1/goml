@@ -86,6 +86,9 @@ type SparseLeastSquares struct {
 	maxIterations  int
 	rt             base.RegularizationType
 
+	//use logit on prediction
+	logistic bool
+
 	// method is the optimization method used when training
 	// the model
 	method base.OptimizationMethod
@@ -136,6 +139,14 @@ type SparseLeastSquares struct {
 //     }
 
 func NewSparseLeastSquares(method base.OptimizationMethod, alpha, alphaMax, regularization float64, rt base.RegularizationType, maxIterations int, trainingSet []map[int]float64, expectedResults []float64, numberOfFeatures int) *SparseLeastSquares {
+	return newSparseLeastSquares(method, alpha, alphaMax, regularization, false, rt, maxIterations, trainingSet, expectedResults, numberOfFeatures)
+}
+
+func NewSparseLogistic(method base.OptimizationMethod, alpha, alphaMax, regularization float64, rt base.RegularizationType, maxIterations int, trainingSet []map[int]float64, expectedResults []float64, numberOfFeatures int) *SparseLeastSquares {
+	return newSparseLeastSquares(method, alpha, alphaMax, regularization, true, rt, maxIterations, trainingSet, expectedResults, numberOfFeatures)
+}
+
+func newSparseLeastSquares(method base.OptimizationMethod, alpha, alphaMax, regularization float64, logistic bool, rt base.RegularizationType, maxIterations int, trainingSet []map[int]float64, expectedResults []float64, numberOfFeatures int) *SparseLeastSquares {
 
 	return &SparseLeastSquares{
 		alpha:          alpha,
@@ -148,6 +159,8 @@ func NewSparseLeastSquares(method base.OptimizationMethod, alpha, alphaMax, regu
 
 		trainingSet:     trainingSet,
 		expectedResults: expectedResults,
+
+		logistic: logistic,
 
 		// initialize θ as the zero vector (that is,
 		// the vector of all zeros)
@@ -238,6 +251,10 @@ func (l *SparseLeastSquares) Predict(x []float64, normalize ...bool) ([]float64,
 		sum += x[i] * l.Parameters[i+1]
 	}
 
+	if l.logistic {
+		sum = 1 / (1 + math.Exp(-sum))
+	}
+
 	return []float64{sum}, nil
 }
 
@@ -252,6 +269,10 @@ func (l *SparseLeastSquares) PredictSparse(x map[int]float64, normalize ...bool)
 
 	for i, v := range x {
 		sum += v * l.Parameters[i+1]
+	}
+
+	if l.logistic {
+		sum = 1 / (1 + math.Exp(-sum))
 	}
 
 	return sum
@@ -279,7 +300,7 @@ func (l *SparseLeastSquares) Learn(file string) error {
 		return err
 	}
 
-	fmt.Fprintf(l.Output, "Training:\n\tModel: SparseLeastSquares Classification\n\tOptimization Method: %v\n\tTraining Examples: %v\n\tFeatures: %v\n\tLearning Rate α: %v-%v\n\tRegularization Parameter λ: %v\n\tRegularization Type: %s\n...\n\n", l.method, examples, len(l.Parameters)-1, l.alphaMax, l.alpha, l.regularization, l.rt.String())
+	fmt.Fprintf(l.Output, "Training:\n\tModel: SparseLeastSquares Classification\n\tOptimization Method: %v\n\tTraining Examples: %v\n\tLogistic: %v\n\tFeatures: %v\n\tLearning Rate α: %v-%v\n\tRegularization Parameter λ: %v\n\tRegularization Type: %s\n...\n\n", l.method, examples, l.logistic, len(l.Parameters)-1, l.alphaMax, l.alpha, l.regularization, l.rt.String())
 
 	var err error
 	if l.method == base.BatchGD {
@@ -447,7 +468,7 @@ func (l *SparseLeastSquares) OnlineLearn(errors chan error, dataset chan base.Da
 					// notice that we don't count the
 					// constant term
 					if j != 0 {
-						gradient -= l.Regularization(j)
+						gradient += (l.regularization * l.Parameters[j])
 					}
 
 					return gradient, nil
@@ -457,7 +478,7 @@ func (l *SparseLeastSquares) OnlineLearn(errors chan error, dataset chan base.Da
 					continue
 				}
 
-				newTheta[j] = l.Parameters[j] + l.alpha*dj
+				newTheta[j] = l.Parameters[j] + (l.alpha*dj)
 			}
 
 			// now simultaneously update Theta
@@ -508,11 +529,16 @@ func (l *SparseLeastSquares) PredictAll() ([]float64, float64) {
 
 	n_cores := runtime.NumCPU()
 	predictions := make([]float64, len(l.trainingSet))
+	if len(predictions) < n_cores {
+		n_cores = len(predictions)
+	}
+	//nObservationsPerCore is always >= 1
+	nObservationsPerCore := int(math.Ceil(float64(len(l.trainingSet)) / float64(n_cores)))
+
 	errors := make([]float64, n_cores)
-
-
 	wg := &sync.WaitGroup{}
 	wg.Add(n_cores)
+
 	for core := 0; core < n_cores; core++ {
 
 		go func(core int) {
@@ -523,10 +549,10 @@ func (l *SparseLeastSquares) PredictAll() ([]float64, float64) {
 				end = 25, 50, 75, 101
 			*/
 
-			nObservationsPerCore := len(l.trainingSet) / n_cores
+			//nObservationsPerCore is always >= 1
 			start := core * nObservationsPerCore
 			end := start + nObservationsPerCore
-			if core == n_cores-1 {
+			if end > len(l.trainingSet) {
 				end = len(l.trainingSet)
 			}
 
@@ -546,7 +572,7 @@ func (l *SparseLeastSquares) PredictAll() ([]float64, float64) {
 		error_sum += core_err
 	}
 
-	return predictions, math.Sqrt(error_sum/float64(len(predictions)))
+	return predictions, math.Sqrt(error_sum / float64(len(predictions)))
 }
 
 // Dj returns the partial derivative of the cost function J(θ)
@@ -608,7 +634,7 @@ func (l *SparseLeastSquares) Dij(i int, j int, prediction_error float64) float64
 	}
 
 	var gradient float64
-	gradient = prediction_error * x
+	gradient = 2 * (-prediction_error) * x
 
 	// add in the regularization term
 	// λ*θ[j]
@@ -616,7 +642,7 @@ func (l *SparseLeastSquares) Dij(i int, j int, prediction_error float64) float64
 	// notice that we don't count the
 	// constant term
 	if j != 0 {
-		gradient -= l.Regularization(j)
+		gradient += l.Regularization(j)
 	}
 
 	return gradient
@@ -625,7 +651,7 @@ func (l *SparseLeastSquares) Dij(i int, j int, prediction_error float64) float64
 func (l *SparseLeastSquares) Regularization(j int) float64 {
 	switch l.rt {
 	case base.L1:
-		return l.regularization * NormAbs(l.Parameters[j])
+		return l.regularization * base.NormAbs(l.Parameters[j])
 	case base.L2:
 		return 2 * l.regularization * (l.Parameters[j])
 	default:

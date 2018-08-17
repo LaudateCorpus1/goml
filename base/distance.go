@@ -1,6 +1,8 @@
 package base
 
-import "math"
+import (
+	"math"
+)
 
 // DistanceMeasure is any function that
 // maps two vectors of float64s to a
@@ -70,5 +72,16 @@ func LNorm(p int) DistanceMeasure {
 			sum += math.Pow(u[i]-v[i], float64(p))
 		}
 		return math.Pow(sum, 1/float64(p))
+	}
+}
+
+func NormAbs(in float64) float64 {
+	switch {
+	case in > 0:
+		return 1
+	case in < 0:
+		return -1
+	default:
+		return 0
 	}
 }

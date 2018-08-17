@@ -31,6 +31,8 @@ func GradientDescent(d Descendable, file string) error {
 		MaxIterations = 250
 	}
 
+	previous_rmse := -1.0
+
 
 	// Stop iterating if the number of iterations exceeds
 	// the limit
@@ -40,6 +42,13 @@ func GradientDescent(d Descendable, file string) error {
 		start := time.Now()
 
 		predictions, rmse := d.PredictAll()
+		if math.Abs(rmse - previous_rmse) < 1e-6 {
+			fmt.Println("Convergence delta=", rmse-previous_rmse)
+			break
+		} else {
+			previous_rmse = rmse
+		}
+
 		newTheta, err := BatchNewThetaParallel(Theta, d, Alpha, predictions)
 		if err != nil {
 			return err
@@ -48,7 +57,7 @@ func GradientDescent(d Descendable, file string) error {
 		// now simultaneously update Theta
 		copy(Theta, newTheta)
 
-		fmt.Println("ttd:", time.Now().Sub(start)*time.Duration(MaxIterations-(iter + 1)), rmse)
+		fmt.Println(iter, "ttd:", time.Now().Sub(start)*time.Duration(MaxIterations-(iter + 1)), rmse)
 		if file != "" {
 			d.PersistToFile(file)
 		}
@@ -57,6 +66,7 @@ func GradientDescent(d Descendable, file string) error {
 
 	return nil
 }
+
 
 func BatchNewTheta(Theta []float64, d Descendable, Alpha float64, predictions []float64) ([]float64, error) {
 	newTheta := make([]float64, len(Theta))
@@ -74,8 +84,16 @@ func BatchNewThetaParallel(Theta []float64, d Descendable, Alpha float64, predic
 
 	newTheta := make([]float64, len(Theta))
 	n_cores := runtime.NumCPU()
+
+	if len(Theta) < n_cores {
+		n_cores = len(Theta)
+	}
+
+	//nObservationsPerCore is always >= 1
+	nFeaturesPerCore := int(math.Ceil(float64(len(Theta)) / float64(n_cores)))
 	wg := &sync.WaitGroup{}
 	wg.Add(n_cores)
+
 	for core := 0; core < n_cores; core++ {
 
 		go func(core int) {
@@ -86,10 +104,9 @@ func BatchNewThetaParallel(Theta []float64, d Descendable, Alpha float64, predic
 				end = 25, 50, 75, 101
 			*/
 
-			n_features_per_core := len(Theta) / n_cores
-			start := core * n_features_per_core
-			end := start + n_features_per_core
-			if core == n_cores-1 {
+			start := core * nFeaturesPerCore
+			end := start + nFeaturesPerCore
+			if end > len(Theta) {
 				end = len(Theta)
 			}
 
@@ -148,6 +165,7 @@ func StochasticGradientDescent(d StochasticDescendable, file string) error {
 	}
 
 	n_features := len(Theta)
+	previous_rmse := -1.0
 
 	// Stop iterating if the number of iterations exceeds
 	// the limit
@@ -185,9 +203,15 @@ func StochasticGradientDescent(d StochasticDescendable, file string) error {
 
 		}
 
-		fmt.Println("ttd:", time.Now().Sub(start)*time.Duration(MaxIterations-(iter+1)))
-		fmt.Println(iter, "Sqrt(Err^2/N)", math.Sqrt(error_sum/float64(Examples)))
-		fmt.Println("learning iter", LearningDriver.Iter, "of", LearningDriver.RestartIter)
+		rmse := math.Sqrt(error_sum/float64(Examples))
+		if math.Abs(rmse - previous_rmse) < 1e-6 {
+			fmt.Println("Convergence delta=", rmse-previous_rmse)
+			break
+		} else {
+			previous_rmse = rmse
+		}
+
+		fmt.Println(iter, "ttd:", time.Now().Sub(start)*time.Duration(MaxIterations-(iter + 1)), rmse)
 
 		if file != "" {
 			d.PersistToFile(file)
@@ -229,9 +253,9 @@ func NewThetaParallel(Theta []float64, d StochasticDescendable, i int, predictio
 
 			for j := start; j < end; j++ {
 				dj := d.Dij(i, j, prediction_error)
-				newθ := Theta[j] + (Alpha * dj)
+				newθ := Theta[j] - (Alpha * dj)
 				if math.IsInf(newθ, 0) || math.IsNaN(newθ) {
-					log.Fatalf("Sorry! Learning diverged. Some value of the parameter vector(%d) theta is ±Inf or NaN", j)
+					log.Fatalf("Sorry! Learning diverged. Some value of the parameter vector(%d) theta is ±Inf(%v) or NaN(%v)", j, math.IsInf(newθ, 0), math.IsNaN(newθ))
 				}
 				newTheta[j] = newθ
 			}
@@ -239,16 +263,15 @@ func NewThetaParallel(Theta []float64, d StochasticDescendable, i int, predictio
 		}(core)
 	}
 	wg.Wait()
-
 }
 
 func NewTheta(Theta []float64, d StochasticDescendable, i int, prediction_error float64, Alpha float64, newTheta []float64) {
 
 	for j := range Theta {
 		dj := d.Dij(i, j, prediction_error)
-		newThetaJ := Theta[j] + (Alpha * dj)
+		newThetaJ := Theta[j] - (Alpha * dj)
 		if math.IsInf(newThetaJ, 0) || math.IsNaN(newThetaJ) {
-			log.Fatalf("Sorry! Learning diverged. Some value of the parameter vector(%d) theta is ±Inf or NaN", j)
+			log.Fatalf("Sorry! Learning diverged. Some value of the parameter vector(%d) theta is ±Inf(%v) or NaN(%v)", j, math.IsInf(newThetaJ, 0), math.IsNaN(newThetaJ))
 		}
 		newTheta[j] = newThetaJ
 	}

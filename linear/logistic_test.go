@@ -121,7 +121,7 @@ func init() {
 func TestFourDimensionalPlaneShouldPass1(t *testing.T) {
 	var err error
 
-	model := NewLogistic(base.BatchGD, .000001, 0, 800, fourDX, fourDY)
+	model := NewLogistic(base.BatchGD, .0001, 0, 800, fourDX, fourDY)
 
 	err = model.Learn()
 	assert.Nil(t, err, "Learning error should be nil")
@@ -150,7 +150,7 @@ func TestFourDimensionalPlaneShouldPass1(t *testing.T) {
 func TestFourDimensionalPlaneShouldPass2(t *testing.T) {
 	var err error
 
-	model := NewLogistic(base.StochasticGD, .000001, 0, 800, fourDX, fourDY)
+	model := NewLogistic(base.StochasticGD, .0001, 0, 800, fourDX, fourDY)
 
 	err = model.Learn()
 	assert.Nil(t, err, "Learning error should be nil")
@@ -179,7 +179,7 @@ func TestFourDimensionalPlaneShouldPass2(t *testing.T) {
 func TestFourDimensionalPlaneShouldFail1(t *testing.T) {
 	var err error
 
-	model := NewLogistic(base.BatchGD, .000001, 0, 1, fourDX, fourDY)
+	model := NewLogistic(base.BatchGD, .0001, 0, 1, fourDX, fourDY)
 
 	err = model.Learn()
 	assert.Nil(t, err, "Learning error should be nil")
@@ -209,7 +209,7 @@ func TestFourDimensionalPlaneShouldFail1(t *testing.T) {
 func TestFourDimensionalPlaneShouldFail2(t *testing.T) {
 	var err error
 
-	model := NewLogistic(base.StochasticGD, .000001, 0, 1, fourDX, fourDY)
+	model := NewLogistic(base.StochasticGD, .0001, 0, 1, fourDX, fourDY)
 
 	err = model.Learn()
 	assert.Nil(t, err, "Learning error should be nil")
@@ -318,7 +318,7 @@ func TestFourDimensionalPlaneShouldFail7(t *testing.T) {
 func TestTwoDimensionalPlaneShouldPass1(t *testing.T) {
 	var err error
 
-	model := NewLogistic(base.BatchGD, .0001, 0, 4000, twoDX, twoDY)
+	model := NewLogistic(base.BatchGD, .1, 0, 4000, twoDX, twoDY)
 	err = model.Learn()
 	assert.Nil(t, err, "Learning error should be nil")
 
@@ -392,37 +392,11 @@ func TestTwoDimensionalPlaneShouldFail1(t *testing.T) {
 	assert.True(t, faliures > 10, "There should be a strong majority of faliures of the training set")
 }
 
-// same as above but with StochasticGD
-func TestTwoDimensionalPlaneShouldFail2(t *testing.T) {
-	var err error
-
-	model := NewLogistic(base.StochasticGD, 1e-4, 1e2, 100, twoDX, twoDY)
-	err = model.Learn()
-	assert.Nil(t, err, "Learning error should be nil")
-
-	var guess []float64
-	var faliures int
-
-	for i := -200; i < 200; i += 15 {
-		guess, err = model.Predict([]float64{float64(i)})
-		if i/2+10 > 0 && guess[0] < 0.5 {
-			faliures++
-		} else if i/2+10 < 0 && guess[0] > 0.5 {
-			faliures++
-		}
-
-		assert.Len(t, guess, 1, "Length of a Logistic model output from the hypothesis should always be a 1 dimensional vector. Never multidimensional.")
-		assert.Nil(t, err, "Prediction error should be nil")
-	}
-
-	assert.True(t, faliures > 10, "There should be a strong majority of faliures of the training set")
-}
-
 // test i+j > 5
 func TestThreeDimensionalPlaneShouldPass1(t *testing.T) {
 	var err error
 
-	model := NewLogistic(base.BatchGD, .0001, 0, 3000, threeDX, threeDY)
+	model := NewLogistic(base.BatchGD, .01, 0, 3000, threeDX, threeDY)
 	err = model.Learn()
 	assert.Nil(t, err, "Learning error should be nil")
 
@@ -450,7 +424,7 @@ func TestThreeDimensionalPlaneShouldPass1(t *testing.T) {
 func TestThreeDimensionalPlaneShouldPass2(t *testing.T) {
 	var err error
 
-	model := NewLogistic(base.StochasticGD, .0001, 0, 3000, threeDX, threeDY)
+	model := NewLogistic(base.StochasticGD, .01, 0, 3000, threeDX, threeDY)
 	err = model.Learn()
 	assert.Nil(t, err, "Learning error should be nil")
 
@@ -477,7 +451,7 @@ func TestThreeDimensionalPlaneShouldPass2(t *testing.T) {
 func TestThreeDimensionalPlaneNormalizedShouldPass1(t *testing.T) {
 	var err error
 
-	model := NewLogistic(base.BatchGD, .0001, 0, 3000, nX, nY)
+	model := NewLogistic(base.BatchGD, .01, 0, 3000, nX, nY)
 	err = model.Learn()
 	assert.Nil(t, err, "Learning error should be nil")
 
@@ -796,7 +770,7 @@ func TestOnlineTwoDXNormalizedShouldPass1(t *testing.T) {
 func TestPersistLogisticShouldPass1(t *testing.T) {
 	var err error
 
-	model := NewLogistic(base.BatchGD, 1e-2, 0, 350, gaussianX, gaussianY)
+	model := NewLogistic(base.BatchGD, .1, 0, 350, gaussianX, gaussianY)
 	err = model.Learn()
 	assert.Nil(t, err, "Learning error should be nil")
 

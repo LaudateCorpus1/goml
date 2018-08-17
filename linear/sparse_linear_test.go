@@ -1,99 +1,68 @@
 package linear
 
 import (
-	"fmt"
-	"math/rand"
-	"os"
+	//"fmt"
+	//"math/rand"
+	//"os"
 	"testing"
 
 	"github.com/bountylabs/goml/base"
 
 	"github.com/stretchr/testify/assert"
+	//"fmt"
+	"fmt"
 )
 
-var flatX [][]float64
-var flatY []float64
-
-var increasingX [][]float64
-var increasingY []float64
-
-var threeDLineX [][]float64
-var threeDLineY []float64
-
-var normX [][]float64
-var normY []float64
-
-var noisyX [][]float64
-var noisyY []float64
+var sparseFlatX []map[int]float64
+var sparseIncreasingX []map[int]float64
+var sparseThreeDLineX []map[int]float64
+//var sparseNormX []map[int]float64
+var sparseNoisyX []map[int]float64
 
 func init() {
 
-	// create the /tmp/.goml/ dir for persistance testing
-	// if it doesn't already exist!
-	err := os.MkdirAll("/tmp/.goml", os.ModePerm)
-	if err != nil {
-		panic(fmt.Sprintf("You should be able to create the directory for goml model persistance testing.\n\tError returned: %v\n", err.Error()))
-	}
+	/*
+		var flatX [][]float64
+		var flatY []float64
 
-	// the line y=3
-	flatX = [][]float64{}
-	flatY = []float64{}
-	for i := -10; i < 10; i++ {
-		for j := -10; j < 10; j++ {
-			for k := -10; k < 10; k++ {
-				flatX = append(flatX, []float64{float64(i), float64(j), float64(k)})
-				flatY = append(flatY, 3.0)
-			}
+		var increasingX [][]float64
+		var increasingY []float64
+
+		var threeDLineX [][]float64
+		var threeDLineY []float64
+
+		var normX [][]float64
+		var normY []float64
+
+		var noisyX [][]float64
+		var noisyY []float64
+	*/
+
+	sparseFlatX = denseToSparse(flatX)
+	sparseIncreasingX = denseToSparse(increasingX)
+	sparseThreeDLineX = denseToSparse(threeDLineX)
+	sparseNoisyX = denseToSparse(noisyX)
+
+}
+
+func denseToSparse(in [][]float64) []map[int]float64 {
+	out := make([]map[int]float64, len(in))
+	for index, features := range in {
+		mp := map[int]float64{}
+		for findex, v := range features {
+			mp[findex] = v
 		}
+		out[index] = mp
 	}
-
-	// the line y=x
-	increasingX = [][]float64{}
-	increasingY = []float64{}
-	for i := -10; i < 10; i++ {
-		increasingX = append(increasingX, []float64{float64(i)})
-		increasingY = append(increasingY, float64(i))
-	}
-
-	threeDLineX = [][]float64{}
-	threeDLineY = []float64{}
-
-	normX = [][]float64{}
-	normY = []float64{}
-	// the line z = 10 + (x/10) + (y/5)
-	for i := -10; i < 10; i++ {
-		for j := -10; j < 10; j++ {
-			threeDLineX = append(threeDLineX, []float64{float64(i), float64(j)})
-			threeDLineY = append(threeDLineY, 10+float64(i)/10+float64(j)/5)
-
-			normX = append(normX, []float64{float64(i), float64(j)})
-		}
-	}
-
-	base.Normalize(normX)
-	for i := range normX {
-		normY = append(normY, 10+float64(normX[i][0])/10+float64(normX[i][1])/5)
-	}
-
-	// noisy x has random noise embedded
-	rand.Seed(42)
-	noisyX = [][]float64{}
-	noisyY = []float64{}
-	for i := 256.0; i < 1024; i += 2 {
-		noisyX = append(noisyX, []float64{i + (rand.Float64()-0.5)*3})
-		noisyY = append(noisyY, 0.5*i+rand.NormFloat64()*25)
-	}
-	// save the random data to make some nice plots!
-	base.SaveDataToCSV("/tmp/.goml/noisy_linear.csv", noisyX, noisyY, true)
+	return out
 }
 
 // test y=3
-func TestFlatLineShouldPass1(t *testing.T) {
+func TestSparseFlatLineShouldPass1(t *testing.T) {
 	var err error
 
-	model := NewLeastSquares(base.BatchGD, .01, 0, 800, flatX, flatY)
-
-	err = model.Learn()
+	model := NewSparseLeastSquares(base.BatchGD, .01, 0.1, 0, base.L2, 800, sparseFlatX, flatY, len(sparseFlatX[0]))
+	err = model.Learn("")
 	assert.Nil(t, err, "Learning error should be nil")
 
 	var guess []float64
@@ -111,12 +80,12 @@ func TestFlatLineShouldPass1(t *testing.T) {
 }
 
 // same as above but with StochasticGD
-func TestFlatLineShouldPass2(t *testing.T) {
+func TestSparseFlatLineShouldPass2(t *testing.T) {
 	var err error
 
-	model := NewLeastSquares(base.StochasticGD, .001, 0, 800, flatX, flatY)
+	model := NewSparseLeastSquares(base.StochasticGD, .00001, .00001, 0, base.L2, 800, sparseFlatX, flatY, len(sparseFlatX[0]))
 
-	err = model.Learn()
+	err = model.Learn("")
 	assert.Nil(t, err, "Learning error should be nil")
 
 	var guess []float64
@@ -134,12 +103,12 @@ func TestFlatLineShouldPass2(t *testing.T) {
 }
 
 // test y=3 but don't have enough iterations
-func TestFlatLineShouldFail1(t *testing.T) {
+func TestSparseFlatLineShouldFail1(t *testing.T) {
 	var err error
 
-	model := NewLeastSquares(base.BatchGD, .01, 0, 1, flatX, flatY)
+	model := NewSparseLeastSquares(base.BatchGD, .01, 0.1, 0, base.L2, 1, sparseFlatX, flatY, len(sparseFlatX[0]))
 
-	err = model.Learn()
+	err = model.Learn("")
 	assert.Nil(t, err, "Learning error should be nil")
 
 	var guess []float64
@@ -162,12 +131,12 @@ func TestFlatLineShouldFail1(t *testing.T) {
 }
 
 // same as above but with StochasticGD
-func TestFlatLineShouldFail2(t *testing.T) {
+func TestSparseFlatLineShouldFail2(t *testing.T) {
 	var err error
 
-	model := NewLeastSquares(base.StochasticGD, .01, 0, 1, flatX, flatY)
+	model := NewSparseLeastSquares(base.StochasticGD, .001, 0.01, 0, base.L2, 1, sparseFlatX, flatY, len(sparseFlatX[0]))
 
-	err = model.Learn()
+	err = model.Learn("")
 	assert.Nil(t, err, "Learning error should be nil")
 
 	var guess []float64
@@ -190,76 +159,51 @@ func TestFlatLineShouldFail2(t *testing.T) {
 }
 
 // test y=3 but include an invalid data set
-func TestFlatLineShouldFail3(t *testing.T) {
+func TestSparseFlatLineShouldFail3(t *testing.T) {
 	var err error
 
-	model := NewLeastSquares(base.BatchGD, 1, 0, 800, [][]float64{}, flatY)
+	model := NewSparseLeastSquares(base.BatchGD, .01, 0.1, 0, base.L2, 1, []map[int]float64{}, flatY, len(sparseFlatX[0]))
 
-	err = model.Learn()
-	assert.NotNil(t, err, "Learning error should not be nil")
-
-	model = NewLeastSquares(base.BatchGD, 1, 0, 800, [][]float64{[]float64{}, []float64{}}, flatY)
-
-	err = model.Learn()
-	assert.NotNil(t, err, "Learning error should not be nil")
-
-	model = NewLeastSquares(base.BatchGD, 1, 0, 800, nil, flatY)
-
-	err = model.Learn()
+	err = model.Learn("")
 	assert.NotNil(t, err, "Learning error should not be nil")
 }
 
 // same as above but with StochasticGD
-func TestFlatLineShouldFail4(t *testing.T) {
+func TestSparseFlatLineShouldFail4(t *testing.T) {
 	var err error
 
-	model := NewLeastSquares(base.StochasticGD, 1, 0, 800, [][]float64{}, flatY)
+	model := NewSparseLeastSquares(base.StochasticGD, .01, 0.1, 0, base.L2, 1, []map[int]float64{}, flatY, len(sparseFlatX[0]))
 
-	err = model.Learn()
-	assert.NotNil(t, err, "Learning error should not be nil")
-
-	model = NewLeastSquares(base.StochasticGD, 1, 0, 800, [][]float64{[]float64{}, []float64{}}, flatY)
-
-	err = model.Learn()
-	assert.NotNil(t, err, "Learning error should not be nil")
-
-	model = NewLeastSquares(base.StochasticGD, 1, 0, 800, nil, flatY)
-
-	err = model.Learn()
+	err = model.Learn("")
 	assert.NotNil(t, err, "Learning error should not be nil")
 }
 
 // test y=3 but include an invalid data set
-func TestFlatLineShouldFail5(t *testing.T) {
+func TestSparseFlatLineShouldFail5(t *testing.T) {
 	var err error
 
-	model := NewLeastSquares(base.BatchGD, 1, 0, 800, flatX, []float64{})
-
-	err = model.Learn()
-	assert.NotNil(t, err, "Learning error should not be nil")
-
-	model = NewLeastSquares(base.BatchGD, 1, 0, 800, flatX, nil)
-
-	err = model.Learn()
+	model := NewSparseLeastSquares(base.StochasticGD, .01, 0.1, 0, base.L2, 1, []map[int]float64{map[int]float64{}}, nil, len(sparseFlatX[0]))
+	err = model.Learn("")
 	assert.NotNil(t, err, "Learning error should not be nil")
 }
 
 // invalid optimization method
-func TestFlatLineShouldFail6(t *testing.T) {
+func TestSparseFlatLineShouldFail6(t *testing.T) {
 	var err error
 
-	model := NewLeastSquares(base.OptimizationMethod("Not A Method!!!"), 1, 0, 800, flatX, flatY)
-
-	err = model.Learn()
+	model := NewSparseLeastSquares("not a method", .01, 0.1, 0, base.L2, 1, sparseFlatX, flatY, len(sparseFlatX[0]))
+	err = model.Learn("")
 	assert.NotNil(t, err, "Learning error should not be nil")
 }
 
 // test y=x
-func TestInclinedLineShouldPass1(t *testing.T) {
+func TestSparseInclinedLineShouldPass1(t *testing.T) {
 	var err error
 
-	model := NewLeastSquares(base.BatchGD, .01, 0, 500, increasingX, increasingY)
-	err = model.Learn()
+	model := NewSparseLeastSquares(base.BatchGD, .01, 0.1, 0, base.L2, 500, sparseIncreasingX, increasingY, len(increasingX[0]))
+
+	//model := NewLeastSquares(base.BatchGD, .01, 0, 500, increasingX, increasingY)
+	err = model.Learn("")
 	assert.Nil(t, err, "Learning error should be nil")
 
 	var guess []float64
@@ -273,11 +217,11 @@ func TestInclinedLineShouldPass1(t *testing.T) {
 }
 
 // same as above but with StochasticGD
-func TestInclinedLineShouldPass2(t *testing.T) {
+func TestSparseInclinedLineShouldPass2(t *testing.T) {
 	var err error
 
-	model := NewLeastSquares(base.StochasticGD, .01, 0, 500, increasingX, increasingY)
-	err = model.Learn()
+	model := NewSparseLeastSquares(base.StochasticGD, .01, .01, 0, base.L2, 500, sparseIncreasingX, increasingY, len(increasingX[0]))
+	err = model.Learn("")
 	assert.Nil(t, err, "Learning error should be nil")
 
 	var guess []float64
@@ -291,11 +235,11 @@ func TestInclinedLineShouldPass2(t *testing.T) {
 }
 
 // test y=x but regularization term too large
-func TestInclinedLineShouldFail1(t *testing.T) {
+func TestSparseInclinedLineShouldFail1(t *testing.T) {
 	var err error
 
-	model := NewLeastSquares(base.BatchGD, .0001, 1e3, 500, increasingX, increasingY)
-	err = model.Learn()
+	model := NewSparseLeastSquares(base.BatchGD, .0001, .0001, 1e3, base.L2, 500, sparseIncreasingX, increasingY, len(increasingX[0]))
+	err = model.Learn("")
 	assert.Nil(t, err, "Learning error should be nil")
 
 	var guess []float64
@@ -314,11 +258,11 @@ func TestInclinedLineShouldFail1(t *testing.T) {
 }
 
 // same as above but with StochasticGD
-func TestInclinedLineShouldFail2(t *testing.T) {
+func TestSparseInclinedLineShouldFail2(t *testing.T) {
 	var err error
 
-	model := NewLeastSquares(base.StochasticGD, 1e-4, 1e3, 300, increasingX, increasingY)
-	err = model.Learn()
+	model := NewSparseLeastSquares(base.StochasticGD, .0001, .0001, 1e3, base.L2, 500, sparseIncreasingX, increasingY, len(increasingX[0]))
+	err = model.Learn("")
 	assert.Nil(t, err, "Learning error should be nil")
 
 	var guess []float64
@@ -337,11 +281,12 @@ func TestInclinedLineShouldFail2(t *testing.T) {
 }
 
 // test z = 10 + (x/10) + (y/5)
-func TestThreeDimensionalLineShouldPass1(t *testing.T) {
+func TestSparseThreeDimensionalLineShouldPass1(t *testing.T) {
 	var err error
 
-	model := NewLeastSquares(base.BatchGD, .01, 0, 1000, threeDLineX, threeDLineY)
-	err = model.Learn()
+	model := NewSparseLeastSquares(base.BatchGD, .01, .01, 0, base.L2, 500, sparseThreeDLineX, threeDLineY, len(threeDLineX[0]))
+	err = model.Learn("")
+
 	assert.Nil(t, err, "Learning error should be nil")
 
 	var guess []float64
@@ -357,11 +302,11 @@ func TestThreeDimensionalLineShouldPass1(t *testing.T) {
 }
 
 // same as above but with StochasticGD
-func TestThreeDimensionalLineShouldPass2(t *testing.T) {
+func TestSparseThreeDimensionalLineShouldPass2(t *testing.T) {
 	var err error
 
-	model := NewLeastSquares(base.StochasticGD, .0001, 0, 1000, threeDLineX, threeDLineY)
-	err = model.Learn()
+	model := NewSparseLeastSquares(base.StochasticGD, .0001, .0001, 0, base.L2, 1000, sparseThreeDLineX, threeDLineY, len(threeDLineX[0]))
+	err = model.Learn("")
 	assert.Nil(t, err, "Learning error should be nil")
 
 	var guess []float64
@@ -376,15 +321,15 @@ func TestThreeDimensionalLineShouldPass2(t *testing.T) {
 	}
 }
 
-//* Test Online Learning through channels *//
 
-func TestOnlineLinearOneDXShouldPass1(t *testing.T) {
+// Test Online Learning through channels
+
+func TestSparseOnlineLinearOneDXShouldPass1(t *testing.T) {
 	// create the channel of data and errors
 	stream := make(chan base.Datapoint, 100)
 	errors := make(chan error)
 
-	model := NewLeastSquares(base.StochasticGD, .0001, 0, 0, nil, nil, 1)
-
+	model := NewSparseLeastSquares(base.StochasticGD, .0001, .0001, 0, base.L2, 0, nil, nil, 1)
 	go model.OnlineLearn(errors, stream, func(theta [][]float64) {})
 
 	// start passing data to our datastream
@@ -421,13 +366,13 @@ func TestOnlineLinearOneDXShouldPass1(t *testing.T) {
 	fmt.Printf("Iter: %v\n", iter)
 }
 
-func TestOnlineLinearOneDXShouldFail1(t *testing.T) {
+
+func TestSparseOnlineLinearOneDXShouldFail1(t *testing.T) {
 	// create the channel of data and errors
 	stream := make(chan base.Datapoint, 1000)
 	errors := make(chan error)
 
-	model := NewLeastSquares(base.StochasticGD, .0001, 0, 0, nil, nil, 1)
-
+	model := NewSparseLeastSquares(base.StochasticGD, .0001, .0001, 0, base.L2, 0, nil, nil, 1)
 	go model.OnlineLearn(errors, stream, func(theta [][]float64) {})
 
 	// give invalid data when it should be -1
@@ -452,13 +397,13 @@ func TestOnlineLinearOneDXShouldFail1(t *testing.T) {
 	}
 }
 
-func TestOnlineLinearOneDXShouldFail2(t *testing.T) {
+
+func TestSparseOnlineLinearOneDXShouldFail2(t *testing.T) {
 	// create the channel of data and errors
 	stream := make(chan base.Datapoint, 1000)
 	errors := make(chan error)
 
-	model := NewLeastSquares(base.StochasticGD, .0001, 0, 0, nil, nil, 1)
-
+	model := NewSparseLeastSquares(base.StochasticGD, .0001, .0001, 0, base.L2, 0, nil, nil, 1)
 	go model.OnlineLearn(errors, stream, func(theta [][]float64) {})
 
 	// give invalid data when it should be -1
@@ -483,27 +428,28 @@ func TestOnlineLinearOneDXShouldFail2(t *testing.T) {
 	}
 }
 
-func TestOnlineLinearOneDXShouldFail3(t *testing.T) {
+
+
+func TestSparseOnlineLinearOneDXShouldFail3(t *testing.T) {
 	// create the channel of errors
 	errors := make(chan error)
 
-	model := NewLeastSquares(base.StochasticGD, .0001, 0, 0, nil, nil, 1)
-
+	model := NewSparseLeastSquares(base.StochasticGD, .0001, .0001, 0, base.L2, 0, nil, nil, 1)
 	go model.OnlineLearn(errors, nil, func(theta [][]float64) {})
 
 	err := <-errors
 	assert.NotNil(t, err, "Learning error should not be nil")
 }
 
-func TestOnlineLinearFourDXShouldPass1(t *testing.T) {
+
+func TestSparseOnlineLinearFourDXShouldPass1(t *testing.T) {
 	// create the channel of data and errors
 	stream := make(chan base.Datapoint, 100)
 	errors := make(chan error)
 
 	var updates int
 
-	model := NewLeastSquares(base.StochasticGD, 1e-5, 0, 0, nil, nil, 4)
-
+	model := NewSparseLeastSquares(base.StochasticGD, 1e-5, 1e-5, 0, base.L2, 0, nil, nil, 4)
 	go model.OnlineLearn(errors, stream, func(theta [][]float64) {
 		updates++
 	})
@@ -560,14 +506,15 @@ func TestOnlineLinearFourDXShouldPass1(t *testing.T) {
 	}
 }
 
-//* Test Persistance To File *//
+
+// Test Persistance To File
 
 // test persisting y=x to file
-func TestPersistLeastSquaresShouldPass1(t *testing.T) {
+func TestSparsePersistLeastSquaresShouldPass1(t *testing.T) {
 	var err error
 
-	model := NewLeastSquares(base.BatchGD, 1e-6, 0, 75, noisyX, noisyY)
-	err = model.Learn()
+	model := NewSparseLeastSquares(base.BatchGD, 1e-6, 1e-6, 0, base.L2, 75, sparseNoisyX, noisyY, len(noisyX[0]))
+	err = model.Learn("")
 	assert.Nil(t, err, "Learning error should be nil")
 
 	var guess []float64
