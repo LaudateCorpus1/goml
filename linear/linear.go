@@ -190,6 +190,10 @@ func (l *LeastSquares) UpdateTrainingSet(trainingSet [][]float64, expectedResult
 	return nil
 }
 
+func (l *LeastSquares) SetLogistic(logit bool) {
+	l.logistic = logit
+}
+
 func (l *LeastSquares) TrainingError(i int) (float64, error) {
 
 	prediction, err := l.Predict(l.trainingSet[i])

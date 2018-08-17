@@ -49,7 +49,13 @@ func GradientDescent(d Descendable, file string) error {
 			previous_rmse = rmse
 		}
 
-		newTheta, err := BatchNewThetaParallel(Theta, d, Alpha, predictions)
+		var newTheta []float64
+		var err error
+		if len(Theta) > 10000 {
+			newTheta, err = BatchNewThetaParallel(Theta, d, Alpha, predictions)
+		} else {
+			newTheta, err = BatchNewTheta(Theta, d, Alpha, predictions)
+		}
 		if err != nil {
 			return err
 		}
@@ -89,7 +95,7 @@ func BatchNewThetaParallel(Theta []float64, d Descendable, Alpha float64, predic
 		n_cores = len(Theta)
 	}
 
-	//nObservationsPerCore is always >= 1
+	//nFeaturesPerCore is always >= 1
 	nFeaturesPerCore := int(math.Ceil(float64(len(Theta)) / float64(n_cores)))
 	wg := &sync.WaitGroup{}
 	wg.Add(n_cores)
@@ -196,11 +202,6 @@ func StochasticGradientDescent(d StochasticDescendable, file string) error {
 
 			copy(Theta, newTheta)
 
-
-			//if trainingIteration % 1000 == 0 {
-			//	fmt.Println(iter, "Sqrt(Err^2/N)", math.Sqrt(error_sum/float64(trainingIteration)))
-			//}
-
 		}
 
 		rmse := math.Sqrt(error_sum/float64(Examples))
@@ -232,8 +233,15 @@ func shuffle(r *rand.Rand, x []int) {
 func NewThetaParallel(Theta []float64, d StochasticDescendable, i int, prediction_error float64, Alpha float64, newTheta []float64) {
 
 	n_cores := runtime.NumCPU()
+	if len(Theta) < n_cores {
+		n_cores = len(Theta)
+	}
+
+	//nFeaturesPerCore is always >= 1
+	nFeaturesPerCore := int(math.Ceil(float64(len(Theta)) / float64(n_cores)))
 	wg := &sync.WaitGroup{}
 	wg.Add(n_cores)
+
 	for core := 0; core < n_cores; core++ {
 
 		go func(core int) {
@@ -244,10 +252,9 @@ func NewThetaParallel(Theta []float64, d StochasticDescendable, i int, predictio
 				end = 25, 50, 75, 101
 			*/
 
-			n_samples := len(Theta) / n_cores
-			start := core * n_samples
-			end := start + n_samples
-			if core == n_cores-1 {
+			start := core * nFeaturesPerCore
+			end := start + nFeaturesPerCore
+			if end > len(Theta) {
 				end = len(Theta)
 			}
 

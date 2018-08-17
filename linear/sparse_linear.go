@@ -194,6 +194,10 @@ func (l *SparseLeastSquares) TrainingError(i int) (float64, error) {
 	return l.expectedResults[i] - prediction, nil
 }
 
+func (l *SparseLeastSquares) SetLogistic(logit bool) {
+	l.logistic = logit
+}
+
 // UpdateLearningRate set's the learning rate of the model
 // to the given float64.
 func (l *SparseLeastSquares) UpdateLearningRate(a float64) {
